@@ -4196,8 +4196,16 @@ void Ui::open_v13_menu(int page) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   } else {
-    label("Bambu SyKICK — v13 menu beta", 112);
-    label("Waveshare ESP32-S3 AMOLED 1.75", 162);
+    label("Bambu SyKICK - Beta 2", 92);
+    label("ESP32-S3 | AMOLED 1.75 | 466x466", 137);
+    char memory_text[64] = {};
+    std::snprintf(memory_text, sizeof(memory_text),
+                  "Free RAM: %lu KB | PSRAM: %lu KB",
+                  static_cast<unsigned long>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024U),
+                  static_cast<unsigned long>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024U));
+    label(memory_text, 187);
+    label(last_snapshot_.wifi_ip.empty() ? "IP: Not connected" :
+          last_snapshot_.wifi_ip.c_str(), 242);
     button("Back", 375, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
