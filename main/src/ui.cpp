@@ -14,6 +14,7 @@
 #include "esp_check.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_random.h"
 #include "esp_memory_utils.h"
 #include "esp_timer.h"
 #include "driver/gpio.h"
@@ -3227,6 +3228,8 @@ esp_err_t Ui::build_dashboard() {
       "neutral", "sad", "happy", "glossy", "sleepy", "surprised"
   };
   face_renderer_->SetEmotion(kV13Faces[static_cast<uint8_t>(v13_preferences_.main_face)]);
+  v13_face_options_.Activity(lv_tick_get());
+  v13_face_timer_ = lv_timer_create(&Ui::v13_face_timer_cb, 1000, this);
   face_home_visible_ = true;
   lv_obj_add_event_cb(face_home_, &Ui::face_event_cb, LV_EVENT_ALL, this);
   lv_obj_move_foreground(face_home_);
@@ -3968,6 +3971,32 @@ void Ui::pager_event_cb(lv_event_t* event) {
   }
 }
 
+void Ui::v13_face_timer_cb(lv_timer_t* timer) {
+  auto* ui = static_cast<Ui*>(lv_timer_get_user_data(timer));
+  if (ui != nullptr) ui->update_v13_face_tick();
+}
+
+void Ui::update_v13_face_tick() {
+  if (!face_renderer_ || !face_home_visible_) return;
+  v13_face_options_.mode = static_cast<int>(v13_preferences_.face_mode);
+  v13_face_options_.main = static_cast<int>(v13_preferences_.main_face);
+  v13_face_options_.idle = static_cast<int>(v13_preferences_.idle_face);
+  v13_face_options_.delay = v13_preferences_.idle_delay_choice;
+  FaceOptions::PrinterMood mood = FaceOptions::Standby;
+  switch (last_snapshot_.lifecycle) {
+    case PrintLifecycleState::kPrinting: mood = FaceOptions::Printing; break;
+    case PrintLifecycleState::kPaused: mood = FaceOptions::Paused; break;
+    case PrintLifecycleState::kError: mood = FaceOptions::Failed; break;
+    case PrintLifecycleState::kFinished: mood = FaceOptions::Complete; break;
+    default: break;
+  }
+  const int next = v13_face_options_.Select(lv_tick_get(), true, mood, esp_random());
+  if (next != v13_last_face_) {
+    v13_last_face_ = next;
+    face_renderer_->SetEmotion(FaceOptions::Names[next]);
+  }
+}
+
 void Ui::refresh_v13_face() {
   if (!face_renderer_) return;
   constexpr uint32_t colors[] = {
@@ -4129,6 +4158,7 @@ void Ui::handle_face_event(lv_event_t* event) {
   lv_indev_get_point(indev, &point);
   if (code == LV_EVENT_PRESSED) {
     face_touch_start_y_ = point.y;
+    v13_face_options_.Activity(lv_tick_get());
     note_activity(false);
   } else if (point.y - face_touch_start_y_ >= kSwipeThresholdPx) {
     // v13 swipe-down opens the Control Center, not brightness control.
