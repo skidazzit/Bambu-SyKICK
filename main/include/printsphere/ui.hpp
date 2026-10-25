@@ -165,6 +165,8 @@ class Ui {
   lv_obj_t* pager_ = nullptr;
   lv_obj_t* face_home_ = nullptr;
   lv_obj_t* v13_menu_ = nullptr;
+  lv_obj_t* v13_clock_time_label_ = nullptr;
+  lv_obj_t* v13_clock_date_label_ = nullptr;
   std::unique_ptr<VideoFace> face_renderer_;
   FaceOptions v13_face_options_{};
   lv_timer_t* v13_face_timer_ = nullptr;
