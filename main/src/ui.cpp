@@ -25,7 +25,7 @@
 #elif defined(PRINTSPHERE_HW_VARIANT_LCD_2_8C)
 #include "bsp/esp32_s3_touch_lcd_2_8c.h"
 #else
-#error "Unknown PrintSphere hardware variant"
+#error "Unknown Bambu SyKICK hardware variant"
 #endif
 
 extern "C" {
