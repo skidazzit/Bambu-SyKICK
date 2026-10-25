@@ -4145,48 +4145,114 @@ void Ui::open_v13_menu(int page) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
     });
   } else if (safe_page == 8) {
-    label("Choose a menu item", 84);
-    constexpr const char* kNames[] = {
-        "Face Options", "Display", "Wi-Fi / Web Config", "Clock", "Sound", "Faces Home"
+    // Focused sort: a round-screen-safe scrolling list with 52px arrow targets.
+    lv_obj_remove_flag(v13_menu_, LV_OBJ_FLAG_SCROLLABLE);
+    v13_sort_selected_ = std::min<uint8_t>(v13_sort_selected_, 5);
+    constexpr const char* kSortNames[] = {
+        "Face Options", "Display", "Wi-Fi", "Clock", "Sound", "Faces Home"
     };
-    std::string options;
-    for (uint8_t id : v13_preferences_.menu_order) {
-      if (!options.empty()) options += "\n";
-      options += kNames[id];
+    lv_obj_t* sort_list = lv_obj_create(v13_menu_);
+    lv_obj_set_size(sort_list, 338, 266);
+    lv_obj_align(sort_list, LV_ALIGN_TOP_MID, 0, 91);
+    lv_obj_set_style_bg_opa(sort_list, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(sort_list, 0, 0);
+    lv_obj_set_style_pad_all(sort_list, 0, 0);
+    lv_obj_set_scroll_dir(sort_list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(sort_list, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_add_flag(sort_list, LV_OBJ_FLAG_SCROLLABLE);
+    for (uint8_t position = 0; position < v13_preferences_.menu_order.size(); ++position) {
+      const uint8_t item_id = v13_preferences_.menu_order[position];
+      const bool focused = position == v13_sort_selected_;
+      lv_obj_t* row = lv_obj_create(sort_list);
+      lv_obj_set_size(row, 320, 82);
+      lv_obj_align(row, LV_ALIGN_TOP_MID, 0, 4 + position * 90);
+      lv_obj_set_style_radius(row, 18, 0);
+      lv_obj_set_style_pad_all(row, 0, 0);
+      lv_obj_set_style_bg_color(row, lv_color_hex(focused ? 0x0C4D58 : 0x0B252C), 0);
+      lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+      lv_obj_set_style_border_width(row, focused ? 2 : 1, 0);
+      lv_obj_set_style_border_color(row, lv_color_hex(focused ? 0x32EBF7 : 0x22535A), 0);
+      lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_add_event_cb(row, [](lv_event_t* e) {
+        auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+        lv_obj_t* row_obj = lv_event_get_target_obj(e);
+        ui->v13_sort_selected_ = static_cast<uint8_t>(lv_obj_get_index(row_obj));
+        ui->open_v13_menu(8);
+      }, LV_EVENT_CLICKED, this);
+
+      lv_obj_t* name = lv_label_create(row);
+      lv_label_set_text(name, kSortNames[item_id]);
+      lv_obj_set_style_text_color(name, lv_color_hex(focused ? 0xFFFFFF : 0xB8D4D8), 0);
+      lv_obj_set_style_text_font(name, &dosis_20, 0);
+      lv_obj_align(name, LV_ALIGN_LEFT_MID, 13, 0);
+
+      auto arrow = [&](bool move_up, int inset) {
+        lv_obj_t* control = lv_button_create(row);
+        lv_obj_set_size(control, 53, 54);
+        lv_obj_align(control, LV_ALIGN_RIGHT_MID, inset, 0);
+        lv_obj_set_style_radius(control, 13, 0);
+        lv_obj_set_style_bg_color(control,
+            lv_color_hex(focused ? 0x087A8C : 0x12434C), 0);
+        lv_obj_t* glyph = lv_label_create(control);
+        lv_label_set_text(glyph, move_up ? LV_SYMBOL_UP : LV_SYMBOL_DOWN);
+        lv_obj_set_style_text_color(glyph, lv_color_hex(0xE8FFFF), 0);
+        lv_obj_center(glyph);
+        if ((move_up && position == 0) ||
+            (!move_up && position + 1 == v13_preferences_.menu_order.size())) {
+          lv_obj_add_state(control, LV_STATE_DISABLED);
+        }
+        lv_obj_add_event_cb(control, move_up
+            ? +[](lv_event_t* e) {
+                auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+                lv_obj_t* row_obj = lv_obj_get_parent(lv_event_get_target_obj(e));
+                const uint8_t selected = static_cast<uint8_t>(lv_obj_get_index(row_obj));
+                if (selected == 0) return;
+                std::swap(ui->v13_preferences_.menu_order[selected],
+                          ui->v13_preferences_.menu_order[selected - 1]);
+                ui->v13_sort_selected_ = selected - 1;
+                save_v13_menu_preferences(ui->v13_preferences_);
+                ui->open_v13_menu(8);
+              }
+            : +[](lv_event_t* e) {
+                auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+                lv_obj_t* row_obj = lv_obj_get_parent(lv_event_get_target_obj(e));
+                const uint8_t selected = static_cast<uint8_t>(lv_obj_get_index(row_obj));
+                if (selected + 1 >= ui->v13_preferences_.menu_order.size()) return;
+                std::swap(ui->v13_preferences_.menu_order[selected],
+                          ui->v13_preferences_.menu_order[selected + 1]);
+                ui->v13_sort_selected_ = selected + 1;
+                save_v13_menu_preferences(ui->v13_preferences_);
+                ui->open_v13_menu(8);
+              }, LV_EVENT_CLICKED, this);
+      };
+      arrow(true, -65);
+      arrow(false, -6);
     }
-    dropdown(options.c_str(), 116, v13_sort_selected_, [](lv_event_t* e) {
-      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
-      ui->v13_sort_selected_ = static_cast<uint8_t>(
-          lv_dropdown_get_selected(lv_event_get_target_obj(e)));
-    });
-    button("Move Up", 186, [](lv_event_t* e) {
-      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
-      if (ui->v13_sort_selected_ == 0) return;
-      const uint8_t selected = ui->v13_sort_selected_;
-      std::swap(ui->v13_preferences_.menu_order[selected],
-                ui->v13_preferences_.menu_order[selected - 1]);
-      ui->v13_sort_selected_--;
-      save_v13_menu_preferences(ui->v13_preferences_);
-      ui->open_v13_menu(8);
-    });
-    button("Move Down", 244, [](lv_event_t* e) {
-      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
-      const uint8_t selected = ui->v13_sort_selected_;
-      if (selected + 1 >= ui->v13_preferences_.menu_order.size()) return;
-      std::swap(ui->v13_preferences_.menu_order[selected],
-                ui->v13_preferences_.menu_order[selected + 1]);
-      ui->v13_sort_selected_++;
-      save_v13_menu_preferences(ui->v13_preferences_);
-      ui->open_v13_menu(8);
-    });
-    button("Reset Order", 302, [](lv_event_t* e) {
+    lv_obj_update_layout(sort_list);
+    const int scroll_target = v13_sort_selected_ > 1
+        ? static_cast<int>(v13_sort_selected_ - 1) * 90 : 0;
+    lv_obj_scroll_to_y(sort_list, scroll_target, LV_ANIM_OFF);
+
+    // Both footer actions remain visible, even when the list scrolls.
+    auto footer = [&](const char* caption, int x, lv_event_cb_t callback) {
+      lv_obj_t* control = lv_button_create(v13_menu_);
+      lv_obj_set_size(control, 131, 42);
+      lv_obj_align(control, LV_ALIGN_TOP_MID, x, 388);
+      lv_obj_set_style_radius(control, 20, 0);
+      lv_obj_set_style_bg_color(control, lv_color_hex(0x146D73), 0);
+      lv_obj_t* caption_label = lv_label_create(control);
+      lv_label_set_text(caption_label, caption);
+      lv_obj_center(caption_label);
+      lv_obj_add_event_cb(control, callback, LV_EVENT_CLICKED, this);
+    };
+    footer("Reset", -73, [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       ui->v13_preferences_.menu_order = {{0, 1, 2, 3, 4, 5}};
       ui->v13_sort_selected_ = 0;
       save_v13_menu_preferences(ui->v13_preferences_);
       ui->open_v13_menu(8);
     });
-    button("Back", 375, [](lv_event_t* e) {
+    footer("Back", 73, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   } else if (safe_page == 1) {
