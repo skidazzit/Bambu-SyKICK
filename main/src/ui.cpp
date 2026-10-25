@@ -75,10 +75,8 @@ constexpr int kPage3StatusAboveImageY = -138;
 constexpr int kAuxTempRowY = 28;
 constexpr int kSwipeThresholdPx = 24;
 constexpr int kGestureAxisLockMarginPx = 16;
-constexpr int kBrightnessHorizontalTolerancePx = 18;
 constexpr int kRotatedVisualOffsetX = 0;
 constexpr int kRotatedVisualOffsetY = 0;
-constexpr int kManualMinBrightnessPercent = 4;
 constexpr uint8_t kRingPulseDepthPercent = 55U;
 constexpr int32_t kParallaxTitleMaxY = -18;
 constexpr int32_t kParallaxCardsMaxY = -8;
@@ -3052,20 +3050,6 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_align(portal_hint_label_, LV_ALIGN_CENTER, 0, 114);
   lv_obj_add_flag(portal_hint_label_, LV_OBJ_FLAG_HIDDEN);
 
-  brightness_overlay_ = lv_label_create(lv_layer_top());
-  set_label_text_if_changed(brightness_overlay_, "80%");
-  lv_obj_set_style_text_font(brightness_overlay_, dosis40, 0);
-  lv_obj_set_style_text_color(brightness_overlay_, lv_color_hex(0xFFFFFF), 0);
-  lv_obj_set_style_bg_color(brightness_overlay_, lv_color_hex(0x000000), 0);
-  lv_obj_set_style_bg_opa(brightness_overlay_, LV_OPA_60, 0);
-  lv_obj_set_style_pad_hor(brightness_overlay_, 20, 0);
-  lv_obj_set_style_pad_ver(brightness_overlay_, 10, 0);
-  lv_obj_set_style_radius(brightness_overlay_, 16, 0);
-  lv_obj_align(brightness_overlay_, LV_ALIGN_CENTER, 0, 0);
-  apply_display_rotation_visual_offset(brightness_overlay_, display_rotation_);
-  lv_obj_add_flag(brightness_overlay_, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_move_foreground(brightness_overlay_);
-
   portal_overlay_card_ = lv_obj_create(lv_layer_top());
   lv_obj_set_size(portal_overlay_card_, 280, LV_SIZE_CONTENT);
   lv_obj_set_style_radius(portal_overlay_card_, 22, 0);
@@ -3623,17 +3607,14 @@ void Ui::handle_screen_event(lv_event_t* event) {
       note_activity(true);
       gesture_active_ = false;
       swipe_switched_ = false;
-      overlay_visible_ = false;
       return;
     }
 
     note_activity(false);
     gesture_active_ = true;
     swipe_switched_ = false;
-    overlay_visible_ = false;
     gesture_start_x_ = point.x;
     gesture_start_y_ = point.y;
-    gesture_start_brightness_ = user_brightness_percent_;
     return;
   }
 
@@ -3648,46 +3629,18 @@ void Ui::handle_screen_event(lv_event_t* event) {
       return;
     }
 
-    if (!overlay_visible_) {
-      // Resolve the gesture once: either a horizontal page swipe or a mostly
-      // vertical brightness drag. This avoids accidental brightness changes
-      // while the finger is moving diagonally during page navigation.
-      const bool horizontal_swipe =
-          abs_dx >= kSwipeThresholdPx &&
-          abs_dx >= (abs_dy - kGestureAxisLockMarginPx);
-      const bool vertical_brightness =
-          abs_dy >= kSwipeThresholdPx &&
-          abs_dx <= kBrightnessHorizontalTolerancePx &&
-          abs_dy >= (abs_dx + kGestureAxisLockMarginPx);
-
-      if (horizontal_swipe) {
-        swipe_switched_ = true;
-        return;
-      }
-      if (!vertical_brightness) {
-        return;
-      }
-
-      set_pager_scroll_locked(true);
+    // Horizontal gestures remain page navigation. Vertical swipes are reserved
+    // for the v13-style menu; they no longer adjust screen brightness.
+    if (abs_dx >= kSwipeThresholdPx &&
+        abs_dx >= (abs_dy - kGestureAxisLockMarginPx)) {
+      swipe_switched_ = true;
     }
-
-    const float delta = static_cast<float>(dy) * (100.0f / 250.0f);
-    const int new_brightness =
-        std::clamp(gesture_start_brightness_ + static_cast<int>(std::lround(delta)),
-                   kManualMinBrightnessPercent, 100);
-    set_brightness_percent(new_brightness);
-
-    char buffer[8] = {};
-    std::snprintf(buffer, sizeof(buffer), "%d%%", user_brightness_percent_);
-    set_label_text_if_changed(brightness_overlay_, buffer);
-    lv_obj_clear_flag(brightness_overlay_, LV_OBJ_FLAG_HIDDEN);
-    overlay_visible_ = true;
     return;
   }
 
   if (code == LV_EVENT_LONG_PRESSED && gesture_active_) {
     note_activity(false);
-    if (!overlay_visible_ && !scrolling_ && !swipe_switched_) {
+    if (!scrolling_ && !swipe_switched_) {
       portal_unlock_requested_.store(true);
     }
     return;
@@ -3704,11 +3657,6 @@ void Ui::handle_screen_event(lv_event_t* event) {
     gesture_active_ = false;
     swipe_switched_ = false;
     set_pager_scroll_locked(false);
-    if (overlay_visible_) {
-      lv_obj_add_flag(brightness_overlay_, LV_OBJ_FLAG_HIDDEN);
-      overlay_visible_ = false;
-      return;
-    }
     if (swipe_locked) {
       return;
     }
