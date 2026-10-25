@@ -1,6 +1,7 @@
 #include "printsphere/v13_menu_preferences.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include "nvs.h"
 
 namespace printsphere {
@@ -31,6 +32,14 @@ void V13MenuPreferences::clamp() {
   idle_brightness = std::min<uint8_t>(idle_brightness, 50);
   volume = std::min<uint8_t>(volume, 100);
   language = std::min<uint8_t>(language, 2);
+  bool seen[6] = {};
+  for (uint8_t value : menu_order) {
+    if (value >= 6 || seen[value]) {
+      menu_order = {{0, 1, 2, 3, 4, 5}};
+      break;
+    }
+    seen[value] = true;
+  }
 }
 
 esp_err_t load_v13_menu_preferences(V13MenuPreferences* prefs) {
@@ -58,6 +67,11 @@ esp_err_t load_v13_menu_preferences(V13MenuPreferences* prefs) {
   prefs->time_zone_choice = read_u8(handle, "time_zone", prefs->time_zone_choice);
   prefs->clock_24_hour = read_u8(handle, "clock_24h", 0) != 0;
   prefs->show_clock_on_home = read_u8(handle, "home_clock", 0) != 0;
+  for (uint8_t i = 0; i < prefs->menu_order.size(); ++i) {
+    char key[12] = {};
+    std::snprintf(key, sizeof(key), "menu_ord_%u", static_cast<unsigned>(i));
+    prefs->menu_order[i] = read_u8(handle, key, i);
+  }
   nvs_close(handle);
   prefs->clamp();
   return ESP_OK;
@@ -87,6 +101,14 @@ esp_err_t save_v13_menu_preferences(const V13MenuPreferences& input) {
   for (const auto& entry : entries) {
     err = save_u8(handle, entry.key, entry.value);
     if (err != ESP_OK) break;
+  }
+  if (err == ESP_OK) {
+    for (uint8_t i = 0; i < prefs.menu_order.size(); ++i) {
+      char key[12] = {};
+      std::snprintf(key, sizeof(key), "menu_ord_%u", static_cast<unsigned>(i));
+      err = save_u8(handle, key, prefs.menu_order[i]);
+      if (err != ESP_OK) break;
+    }
   }
   if (err == ESP_OK) err = nvs_commit(handle);
   nvs_close(handle);
