@@ -11,6 +11,8 @@
 #include "esp_err.h"
 #include "printsphere/config_store.hpp"
 #include "printsphere/printer_state.hpp"
+#include "printsphere/v13_menu_preferences.hpp"
+#include "video_face.h"
 
 namespace printsphere {
 
@@ -121,6 +123,7 @@ class Ui {
   lv_obj_t* page_object(int page) const;
   void handle_pager_event(lv_event_t* event);
   void handle_screen_event(lv_event_t* event);
+  void handle_face_event(lv_event_t* event);
   void handle_logo_event(lv_event_t* event);
   void update_portal_access_visuals_locked();
   void compute_portal_texts_locked();
@@ -140,6 +143,7 @@ class Ui {
   static void pulse_anim_exec_cb(void* var, int32_t scale);
   static void pager_event_cb(lv_event_t* event);
   static void screen_event_cb(lv_event_t* event);
+  static void face_event_cb(lv_event_t* event);
   static void logo_event_cb(lv_event_t* event);
   static void pause_button_event_cb(lv_event_t* event);
   static void stop_button_event_cb(lv_event_t* event);
@@ -153,6 +157,11 @@ class Ui {
   lv_display_t* display_ = nullptr;
   lv_obj_t* screen_ = nullptr;
   lv_obj_t* pager_ = nullptr;
+  lv_obj_t* face_home_ = nullptr;
+  std::unique_ptr<VideoFace> face_renderer_;
+  V13MenuPreferences v13_preferences_{};
+  bool face_home_visible_ = false;
+  lv_coord_t face_touch_start_y_ = 0;
   lv_obj_t* fixed_overlay_ = nullptr;
   lv_obj_t* page0_ = nullptr;
   lv_obj_t* page0_title_ = nullptr;
