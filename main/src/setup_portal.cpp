@@ -3186,7 +3186,7 @@ esp_err_t SetupPortal::handle_root(httpd_req_t* request) {
           "var blob=new Blob([dbgFull],{type:'text/plain'});"
           "var url=URL.createObjectURL(blob);"
           "var a=document.createElement('a');a.href=url;"
-          "a.download='printsphere_debug_log.txt';"
+          "a.download='bambu_sykick_debug_log.txt';"
           "document.body.appendChild(a);a.click();"
           "document.body.removeChild(a);URL.revokeObjectURL(url);"
           "});}";
