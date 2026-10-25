@@ -1,6 +1,6 @@
-# Building PrintSphere
+# Building Bambu SyKICK
 
-This document is for developers and advanced users who want to clone, build, flash or package PrintSphere themselves. Most users should use the [PrintSphere Web Installer](https://cptkirki.github.io/PrintSphere/flash/).
+This document is for developers and advanced users who want to clone, build, flash or package Bambu SyKICK themselves. Most users should use the [Bambu SyKICK Web Installer](https://skidazzit.github.io/Bambu-SyKICK/flash/).
 
 ## Requirements
 
@@ -16,8 +16,8 @@ The project uses C17, C++17 and LVGL `v9.5.0`.
 ## Clone the repository
 
 ```powershell
-git clone https://github.com/cptkirki/PrintSphere.git
-cd PrintSphere
+git clone https://github.com/skidazzit/Bambu-SyKICK.git
+cd Bambu SyKICK
 ```
 
 Activate the ESP-IDF environment before running `idf.py`. On Windows, use the ESP-IDF PowerShell or command prompt installed with ESP-IDF.
