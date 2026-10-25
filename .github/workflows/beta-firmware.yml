@@ -44,7 +44,7 @@ jobs:
       - name: Upload beta files for review (not published)
         uses: actions/upload-artifact@v4
         with:
-          name: Bambu-SyKICK-beta-1.75-AMOLED-${{ github.ref_name }}
+          name: Bambu-SyKICK-beta-v13-menu-port
           path: |
             release/beta/printsphere_full.bin
             release/beta/printsphere_ota.bin
