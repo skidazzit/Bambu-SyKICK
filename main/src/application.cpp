@@ -287,6 +287,7 @@ void Application::run() {
   filament_anim_enabled_ = config_store_.load_filament_anim_enabled();
   audio_notifier_.set_enabled(config_store_.load_audio_enabled());
   audio_notifier_.set_volume_percent(config_store_.load_audio_volume_percent());
+  ui_.configure_sound_controls(&config_store_, &audio_notifier_);
 
   // Mount the LittleFS partition that holds custom sound files.
   // Must be done before loading PCM blobs below.
