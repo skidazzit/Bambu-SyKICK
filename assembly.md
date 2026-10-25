@@ -123,7 +123,7 @@ The bootloader is already included in the merged image.
 
 1. After flashing, Bambu SyKICK starts a setup AP:
    - SSID: `Bambu SyKICK-Setup`
-   - password: `printsphere`
+   - password: `BambuSyKICK`
 2. Connect to that Wi-Fi and open `http://192.168.4.1`.
 3. Save your home Wi-Fi credentials.
 4. After reboot, open the new device IP in your home network.
