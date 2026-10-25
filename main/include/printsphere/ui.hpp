@@ -168,6 +168,7 @@ class Ui {
   std::unique_ptr<VideoFace> face_renderer_;
   FaceOptions v13_face_options_{};
   lv_timer_t* v13_face_timer_ = nullptr;
+  int v13_last_face_ = -1;
   V13MenuPreferences v13_preferences_{};
   bool face_home_visible_ = false;
   lv_coord_t face_touch_start_y_ = 0;
