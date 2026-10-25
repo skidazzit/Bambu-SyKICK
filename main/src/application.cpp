@@ -291,15 +291,10 @@ void Application::run() {
   // Mount the LittleFS partition that holds custom sound files.
   // Must be done before loading PCM blobs below.
   {
-    const esp_vfs_littlefs_conf_t lfs_conf = {
-        .base_path = "/sounds",
-        .partition_label = "sounds",
-        .partition = nullptr,
-        .format_if_mount_failed = true,
-        .read_only = false,
-        .dont_mount = false,
-        .grow_on_mount = false,
-    };
+    esp_vfs_littlefs_conf_t lfs_conf{};
+    lfs_conf.base_path = "/sounds";
+    lfs_conf.partition_label = "sounds";
+    lfs_conf.format_if_mount_failed = true;
     const esp_err_t lfs_err = esp_vfs_littlefs_register(&lfs_conf);
     if (lfs_err != ESP_OK) {
       ESP_LOGW(kTag, "LittleFS mount failed (%s) - custom sounds unavailable this boot",
