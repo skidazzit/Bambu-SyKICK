@@ -4020,8 +4020,8 @@ void Ui::open_v13_menu(int page) {
   if (!v13_menu_) return;
   lv_obj_clean(v13_menu_);
   lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_OFF);
-  const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About"};
-  const int safe_page = std::clamp(page, 0, 4);
+  const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About", "Idle Face"};
+  const int safe_page = std::clamp(page, 0, 5);
   lv_obj_t* title = lv_label_create(v13_menu_);
   lv_label_set_text(title, titles[safe_page]);
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
@@ -4105,8 +4105,32 @@ void Ui::open_v13_menu(int page) {
       ui->refresh_v13_face();
       save_v13_menu_preferences(ui->v13_preferences_);
     });
-    button("Back", 375, [](lv_event_t* e) {
+    button("Idle face / Delay", 333, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(5);
+    });
+    button("Back", 388, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
+    });
+  } else if (safe_page == 5) {
+    label("Idle face", 98);
+    dropdown("Idle\nSad\nHappy\nGlossy\nSleepy\nSurprised\nSad / Sleepy", 131,
+      static_cast<int>(v13_preferences_.idle_face), [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      ui->v13_preferences_.idle_face = static_cast<V13IdleFace>(
+          lv_dropdown_get_selected(lv_event_get_target_obj(e)));
+      save_v13_menu_preferences(ui->v13_preferences_);
+    });
+    label("Idle after", 209);
+    dropdown("10 seconds\n30 seconds\n1 minute\n2 minutes\n5 minutes\n10 minutes\nNever", 241,
+      v13_preferences_.idle_delay_choice, [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      ui->v13_preferences_.idle_delay_choice = lv_dropdown_get_selected(
+          lv_event_get_target_obj(e));
+      ui->v13_face_options_.Activity(lv_tick_get());
+      save_v13_menu_preferences(ui->v13_preferences_);
+    });
+    button("Back", 375, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(1);
     });
   } else if (safe_page == 2) {
     label("Brightness", 96);
