@@ -124,6 +124,9 @@ class Ui {
   void handle_pager_event(lv_event_t* event);
   void handle_screen_event(lv_event_t* event);
   void handle_face_event(lv_event_t* event);
+  void open_v13_menu(int page);
+  void close_v13_menu();
+  void refresh_v13_face();
   void handle_logo_event(lv_event_t* event);
   void update_portal_access_visuals_locked();
   void compute_portal_texts_locked();
@@ -158,6 +161,7 @@ class Ui {
   lv_obj_t* screen_ = nullptr;
   lv_obj_t* pager_ = nullptr;
   lv_obj_t* face_home_ = nullptr;
+  lv_obj_t* v13_menu_ = nullptr;
   std::unique_ptr<VideoFace> face_renderer_;
   V13MenuPreferences v13_preferences_{};
   bool face_home_visible_ = false;
