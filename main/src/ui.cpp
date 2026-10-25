@@ -4074,22 +4074,22 @@ void Ui::open_v13_menu(int page) {
     lv_obj_add_event_cb(d, cb, LV_EVENT_VALUE_CHANGED, this);
   };
   if (safe_page == 0) {
-    button("Face Options", 82, [](lv_event_t* e) {
+    button("Face Options", 72, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(1);
     });
-    button("Display / Brightness", 137, [](lv_event_t* e) {
+    button("Display / Brightness", 122, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(2);
     });
-    button("Wi-Fi / Web Config", 192, [](lv_event_t* e) {
+    button("Wi-Fi / Web Config", 172, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(3);
     });
-    button("Clock", 247, [](lv_event_t* e) {
+    button("Clock", 222, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(6);
     });
-    button("Sound", 302, [](lv_event_t* e) {
+    button("Sound", 272, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(7);
     });
-    button("Faces Home", 365, [](lv_event_t* e) {
+    button("Faces Home", 322, [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       if (ui->face_home_) {
         lv_obj_clear_flag(ui->face_home_, LV_OBJ_FLAG_HIDDEN);
@@ -4098,6 +4098,9 @@ void Ui::open_v13_menu(int page) {
         lv_obj_move_foreground(ui->face_home_);
       }
       ui->close_v13_menu();
+    });
+    button("About", 372, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
     });
   } else if (safe_page == 1) {
     label("Main face mode", 78);
@@ -4229,9 +4232,6 @@ void Ui::open_v13_menu(int page) {
     label("Open Web Config using the device's Wi-Fi IP", 110);
     label(last_snapshot_.wifi_ip.empty() ? "Wi-Fi not connected" :
           last_snapshot_.wifi_ip.c_str(), 160);
-    button("About", 285, [](lv_event_t* e) {
-      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
-    });
     button("Back", 375, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
