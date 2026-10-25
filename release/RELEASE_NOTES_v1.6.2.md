@@ -1,4 +1,4 @@
-# PrintSphere v1.6.2
+# Bambu SyKICK v1.6.2
 
 Patch release on top of v1.6.1 focused on reliable local MQTT connectivity in
 mesh networks, WPA2/WPA3 compatibility, camera-page layout, and simpler first
@@ -18,7 +18,7 @@ time setup. OTA-compatible with v1.6.1 (no partition table change).
   is no longer gated by printer camera type or by the cloud session being
   online. X1C/RTSP printers and printers whose cloud status is temporarily
   unavailable can still establish their local MQTT connection.
-- **Removed the pre-MQTT TCP probe**: PrintSphere now starts the MQTT/TLS
+- **Removed the pre-MQTT TCP probe**: Bambu SyKICK now starts the MQTT/TLS
   handshake directly and relies on esp-mqtt's transport diagnostics and
   reconnect handling. The separate probe could fail on transient mesh paths
   or interfere with the subsequent broker connection.
@@ -33,7 +33,7 @@ time setup. OTA-compatible with v1.6.1 (no partition table change).
   obscuring it.
 - **USB Wi-Fi setup after a factory flash**: The installer now uses Improv
   Serial to scan nearby Wi-Fi networks and transfer credentials over the USB
-  cable. The PrintSphere setup hotspot remains available as a fallback.
+  cable. The Bambu SyKICK setup hotspot remains available as a fallback.
 - **OTA update entry point on the install page**: Select the hardware variant,
   enter the device IP address, and the page opens the device's OTA updater with
   the matching image selected. OTA writes the inactive app slot and retains
