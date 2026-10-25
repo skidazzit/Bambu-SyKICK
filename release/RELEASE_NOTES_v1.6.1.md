@@ -1,4 +1,4 @@
-# PrintSphere v1.6.1
+# Bambu SyKICK v1.6.1
 
 Patch release on top of v1.6 focused on display stability during prints, power-save behavior, and local MQTT status accuracy. OTA-compatible with v1.6 (no partition table change).
 
@@ -37,6 +37,6 @@ Patch release on top of v1.6 focused on display stability during prints, power-s
 ## Known Notes
 
 - Between periodic `pushall` responses the raw stage field can alternate between `printing` and an empty placeholder in partial reports. This is cosmetic: lifecycle and displayed status remain `printing`.
-- `esp_lvgl_adapter` v0.6.2 is available upstream but is intentionally not adopted in this release: its changes do not affect PrintSphere's code paths, and updating would drop the local worker-scheduling patch.
+- `esp_lvgl_adapter` v0.6.2 is available upstream but is intentionally not adopted in this release: its changes do not affect Bambu SyKICK's code paths, and updating would drop the local worker-scheduling patch.
 - X2D and A2L support is based on the published protocol behavior of these models (identical V2 payload structures as H2/P2S and A1 respectively); it has not yet been verified against physical devices. The X2D Developer-Mode requirement for local status mirrors the H2 series policy and is a one-line capability-table change if it turns out to differ.
 
