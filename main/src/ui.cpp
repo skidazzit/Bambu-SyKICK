@@ -4040,6 +4040,7 @@ void Ui::open_v13_menu(int page) {
   v13_clock_time_label_ = nullptr;
   v13_clock_date_label_ = nullptr;
   lv_obj_clean(v13_menu_);
+  lv_obj_scroll_to_y(v13_menu_, 0, LV_ANIM_OFF);
   lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_OFF);
   const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About", "Idle Face", "Clock", "Sound"};
   const int safe_page = std::clamp(page, 0, 7);
@@ -4074,22 +4075,51 @@ void Ui::open_v13_menu(int page) {
     lv_obj_add_event_cb(d, cb, LV_EVENT_VALUE_CHANGED, this);
   };
   if (safe_page == 0) {
-    button("Face Options", 72, [](lv_event_t* e) {
+    // Sliders live in Control Center; menu options scroll below them.
+    lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_add_flag(v13_menu_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scroll_dir(v13_menu_, LV_DIR_VER);
+    label("Brightness", 77);
+    lv_obj_t* brightness = lv_slider_create(v13_menu_);
+    lv_obj_set_size(brightness, 270, 18);
+    lv_obj_align(brightness, LV_ALIGN_TOP_MID, 0, 111);
+    lv_slider_set_range(brightness, 10, 100);
+    lv_slider_set_value(brightness, v13_preferences_.brightness, LV_ANIM_OFF);
+    lv_obj_add_event_cb(brightness, [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      ui->v13_preferences_.brightness = lv_slider_get_value(lv_event_get_target_obj(e));
+      ui->set_brightness_percent(ui->v13_preferences_.brightness);
+      save_v13_menu_preferences(ui->v13_preferences_);
+    }, LV_EVENT_RELEASED, this);
+    label("Volume", 151);
+    lv_obj_t* volume = lv_slider_create(v13_menu_);
+    lv_obj_set_size(volume, 270, 18);
+    lv_obj_align(volume, LV_ALIGN_TOP_MID, 0, 185);
+    lv_slider_set_range(volume, 0, 100);
+    lv_slider_set_value(volume, sound_notifier_ ? sound_notifier_->volume_percent() : 60,
+                        LV_ANIM_OFF);
+    lv_obj_add_event_cb(volume, [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      const int value = lv_slider_get_value(lv_event_get_target_obj(e));
+      if (ui->sound_notifier_) ui->sound_notifier_->set_volume_percent(value);
+      if (ui->sound_config_store_) ui->sound_config_store_->save_audio_volume_percent(value);
+    }, LV_EVENT_RELEASED, this);
+    button("Face Options", 240, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(1);
     });
-    button("Display / Brightness", 122, [](lv_event_t* e) {
+    button("Display / Brightness", 290, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(2);
     });
-    button("Wi-Fi / Web Config", 172, [](lv_event_t* e) {
+    button("Wi-Fi / Web Config", 340, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(3);
     });
-    button("Clock", 222, [](lv_event_t* e) {
+    button("Clock", 390, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(6);
     });
-    button("Sound", 272, [](lv_event_t* e) {
+    button("Sound", 440, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(7);
     });
-    button("Faces Home", 322, [](lv_event_t* e) {
+    button("Faces Home", 490, [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       if (ui->face_home_) {
         lv_obj_clear_flag(ui->face_home_, LV_OBJ_FLAG_HIDDEN);
@@ -4099,7 +4129,7 @@ void Ui::open_v13_menu(int page) {
       }
       ui->close_v13_menu();
     });
-    button("About", 372, [](lv_event_t* e) {
+    button("About", 540, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
     });
   } else if (safe_page == 1) {
@@ -4157,19 +4187,8 @@ void Ui::open_v13_menu(int page) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(1);
     });
   } else if (safe_page == 2) {
-    label("Brightness", 96);
-    lv_obj_t* slider = lv_slider_create(v13_menu_);
-    lv_obj_set_size(slider, 270, 18);
-    lv_obj_align(slider, LV_ALIGN_TOP_MID, 0, 145);
-    lv_slider_set_range(slider, 10, 100);
-    lv_slider_set_value(slider, v13_preferences_.brightness, LV_ANIM_OFF);
-    lv_obj_add_event_cb(slider, [](lv_event_t* e) {
-      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
-      ui->v13_preferences_.brightness = lv_slider_get_value(lv_event_get_target_obj(e));
-      ui->set_brightness_percent(ui->v13_preferences_.brightness);
-      save_v13_menu_preferences(ui->v13_preferences_);
-    }, LV_EVENT_RELEASED, this);
-    label("Idle brightness and power rules remain in Web Config", 205);
+    label("Brightness control is in Control Center", 110);
+    label("Idle brightness and power rules: Web Config", 185);
     button("Back", 375, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
@@ -4186,20 +4205,7 @@ void Ui::open_v13_menu(int page) {
       if (ui->sound_notifier_) ui->sound_notifier_->set_enabled(on);
       if (ui->sound_config_store_) ui->sound_config_store_->save_audio_enabled(on);
     }, LV_EVENT_VALUE_CHANGED, this);
-    label("Volume", 206);
-    lv_obj_t* volume = lv_slider_create(v13_menu_);
-    lv_obj_set_size(volume, 270, 18);
-    lv_obj_align(volume, LV_ALIGN_TOP_MID, 0, 254);
-    lv_slider_set_range(volume, 0, 100);
-    lv_slider_set_value(volume, sound_notifier_ ? sound_notifier_->volume_percent() : 60,
-                        LV_ANIM_OFF);
-    lv_obj_add_event_cb(volume, [](lv_event_t* e) {
-      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
-      const int value = lv_slider_get_value(lv_event_get_target_obj(e));
-      if (ui->sound_notifier_) ui->sound_notifier_->set_volume_percent(value);
-      if (ui->sound_config_store_) ui->sound_config_store_->save_audio_volume_percent(value);
-    }, LV_EVENT_RELEASED, this);
-    button("Test sound", 307, [](lv_event_t* e) {
+    button("Test sound", 246, [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       if (ui->sound_notifier_) ui->sound_notifier_->play_test();
     });
