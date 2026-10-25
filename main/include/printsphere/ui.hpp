@@ -177,6 +177,7 @@ class Ui {
   lv_timer_t* v13_face_timer_ = nullptr;
   int v13_last_face_ = -1;
   V13MenuPreferences v13_preferences_{};
+  uint8_t v13_sort_selected_ = 0;
   bool face_home_visible_ = false;
   lv_coord_t face_touch_start_y_ = 0;
   lv_obj_t* fixed_overlay_ = nullptr;
