@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(PRINTSPHERE_RELEASE_VERSION "v1.6.2")
 set(PROJECT_VER "${PRINTSPHERE_RELEASE_VERSION}")
 set(PRINTSPHERE_HW_VARIANT "lcd_2_8c" CACHE STRING
-    "PrintSphere hardware variant: lcd_2_8c or amoled_1_75")
+    "Bambu SyKICK hardware variant: lcd_2_8c or amoled_1_75")
 set_property(CACHE PRINTSPHERE_HW_VARIANT PROPERTY STRINGS "lcd_2_8c" "amoled_1_75")
 
 if(PRINTSPHERE_HW_VARIANT STREQUAL "lcd_2_8c")
