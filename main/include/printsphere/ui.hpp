@@ -13,6 +13,7 @@
 #include "printsphere/printer_state.hpp"
 #include "printsphere/v13_menu_preferences.hpp"
 #include "video_face.h"
+#include "v13_face_options.h"
 
 namespace printsphere {
 
@@ -127,6 +128,8 @@ class Ui {
   void open_v13_menu(int page);
   void close_v13_menu();
   void refresh_v13_face();
+  void update_v13_face_tick();
+  static void v13_face_timer_cb(lv_timer_t* timer);
   void handle_logo_event(lv_event_t* event);
   void update_portal_access_visuals_locked();
   void compute_portal_texts_locked();
@@ -163,6 +166,8 @@ class Ui {
   lv_obj_t* face_home_ = nullptr;
   lv_obj_t* v13_menu_ = nullptr;
   std::unique_ptr<VideoFace> face_renderer_;
+  FaceOptions v13_face_options_{};
+  lv_timer_t* v13_face_timer_ = nullptr;
   V13MenuPreferences v13_preferences_{};
   bool face_home_visible_ = false;
   lv_coord_t face_touch_start_y_ = 0;
