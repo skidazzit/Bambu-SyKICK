@@ -12,6 +12,10 @@ on:
       - "components/**"
       - "tools/package_initial_flash.py"
 
+concurrency:
+  group: bambu-beta-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
