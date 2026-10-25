@@ -1301,7 +1301,11 @@ esp_err_t Ui::initialize() {
   applied_brightness_percent_ = -1;
   screen_power_mode_ = ScreenPowerMode::kAwake;
   last_activity_tick_ms_.store(lv_tick_get());
-  set_brightness_percent(kDefaultBrightnessPercent);
+  const esp_err_t v13_result = load_v13_menu_preferences(&v13_preferences_);
+  if (v13_result != ESP_OK) {
+    ESP_LOGW(kTag, "v13 menu settings unavailable: %s", esp_err_to_name(v13_result));
+  }
+  set_brightness_percent(v13_preferences_.brightness);
   ESP_RETURN_ON_ERROR(build_dashboard(), kTag, "build_dashboard failed");
 
   // With LV_SCROLL_SNAP_NONE the pager decelerates freely after finger release.
@@ -1903,6 +1907,12 @@ void Ui::apply_snapshot_locked(const PrinterSnapshot& snapshot, bool force_ring_
   if (snapshot.print_active != last_print_active_) {
     wake_due_to_state_change = true;
     last_print_active_ = snapshot.print_active;
+    if (snapshot.print_active && face_home_visible_ && face_home_ != nullptr) {
+      lv_obj_add_flag(face_home_, LV_OBJ_FLAG_HIDDEN);
+      if (face_renderer_) face_renderer_->SetVisible(false);
+      face_home_visible_ = false;
+      set_active_page(kPageIdxMain);
+    }
   }
   if (wake_due_to_state_change) {
     note_activity(true);
@@ -3196,6 +3206,31 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_add_flag(page3_subnote_, LV_OBJ_FLAG_HIDDEN);
   enable_touch_bubble(page3_subnote_);
 
+  // Home face is a separate overlay. The printer pager remains fully intact.
+  face_home_ = lv_obj_create(screen_);
+  lv_obj_set_size(face_home_, board::kDisplayWidth, board::kDisplayHeight);
+  lv_obj_center(face_home_);
+  lv_obj_set_style_bg_color(face_home_, lv_color_hex(0x000000), 0);
+  lv_obj_set_style_bg_opa(face_home_, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(face_home_, 0, 0);
+  lv_obj_set_style_pad_all(face_home_, 0, 0);
+  lv_obj_clear_flag(face_home_, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(face_home_, LV_OBJ_FLAG_CLICKABLE);
+  face_renderer_ = std::make_unique<VideoFace>(face_home_);
+  constexpr uint32_t kV13Colors[] = {
+      0x00FFFF, 0x1688FF, 0x33DD66, 0xFF9B31, 0xB66BFF,
+      0xFF4141, 0xFFFFFF, 0xFF7DBC, 0xFFDD36
+  };
+  face_renderer_->SetColor(kV13Colors[static_cast<uint8_t>(v13_preferences_.face_color)],
+                           v13_preferences_.match_heart_color);
+  constexpr const char* kV13Faces[] = {
+      "neutral", "sad", "happy", "glossy", "sleepy", "surprised"
+  };
+  face_renderer_->SetEmotion(kV13Faces[static_cast<uint8_t>(v13_preferences_.main_face)]);
+  face_home_visible_ = true;
+  lv_obj_add_event_cb(face_home_, &Ui::face_event_cb, LV_EVENT_ALL, this);
+  lv_obj_move_foreground(face_home_);
+
   lv_obj_add_event_cb(screen_, &Ui::screen_event_cb, LV_EVENT_ALL, this);
   lv_obj_update_layout(pager_);
   lv_obj_scroll_to_view(page1_, LV_ANIM_OFF);
@@ -3915,6 +3950,32 @@ void Ui::pager_event_cb(lv_event_t* event) {
   auto* ui = static_cast<Ui*>(lv_event_get_user_data(event));
   if (ui != nullptr) {
     ui->handle_pager_event(event);
+  }
+}
+
+void Ui::face_event_cb(lv_event_t* event) {
+  auto* ui = static_cast<Ui*>(lv_event_get_user_data(event));
+  if (ui != nullptr) ui->handle_face_event(event);
+}
+
+void Ui::handle_face_event(lv_event_t* event) {
+  if (!face_home_visible_) return;
+  const lv_event_code_t code = lv_event_get_code(event);
+  if (code != LV_EVENT_PRESSED && code != LV_EVENT_RELEASED) return;
+  lv_indev_t* indev = lv_indev_get_act();
+  if (!indev) return;
+  lv_point_t point{};
+  lv_indev_get_point(indev, &point);
+  if (code == LV_EVENT_PRESSED) {
+    face_touch_start_y_ = point.y;
+    note_activity(false);
+  } else if (face_touch_start_y_ - point.y >= kSwipeThresholdPx) {
+    // v13 swipe-up opens the existing printer dashboard.
+    lv_obj_add_flag(face_home_, LV_OBJ_FLAG_HIDDEN);
+    if (face_renderer_) face_renderer_->SetVisible(false);
+    face_home_visible_ = false;
+    set_active_page(kPageIdxMain);
+    note_activity(false);
   }
 }
 
