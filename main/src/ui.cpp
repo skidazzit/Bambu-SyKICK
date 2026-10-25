@@ -3231,6 +3231,16 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_add_event_cb(face_home_, &Ui::face_event_cb, LV_EVENT_ALL, this);
   lv_obj_move_foreground(face_home_);
 
+  v13_menu_ = lv_obj_create(screen_);
+  lv_obj_set_size(v13_menu_, board::kDisplayWidth, board::kDisplayHeight);
+  lv_obj_center(v13_menu_);
+  lv_obj_set_style_bg_color(v13_menu_, lv_color_hex(0x081319), 0);
+  lv_obj_set_style_bg_opa(v13_menu_, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(v13_menu_, 0, 0);
+  lv_obj_set_style_pad_all(v13_menu_, 0, 0);
+  lv_obj_add_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_move_foreground(v13_menu_);
+
   lv_obj_add_event_cb(screen_, &Ui::screen_event_cb, LV_EVENT_ALL, this);
   lv_obj_update_layout(pager_);
   lv_obj_scroll_to_view(page1_, LV_ANIM_OFF);
@@ -3953,6 +3963,142 @@ void Ui::pager_event_cb(lv_event_t* event) {
   }
 }
 
+void Ui::refresh_v13_face() {
+  if (!face_renderer_) return;
+  constexpr uint32_t colors[] = {
+      0x00FFFF, 0x1688FF, 0x33DD66, 0xFF9B31, 0xB66BFF,
+      0xFF4141, 0xFFFFFF, 0xFF7DBC, 0xFFDD36
+  };
+  constexpr const char* faces[] = {
+      "neutral", "sad", "happy", "glossy", "sleepy", "surprised"
+  };
+  v13_preferences_.clamp();
+  face_renderer_->SetColor(colors[static_cast<uint8_t>(v13_preferences_.face_color)],
+                           v13_preferences_.match_heart_color);
+  face_renderer_->SetEmotion(faces[static_cast<uint8_t>(v13_preferences_.main_face)]);
+}
+
+void Ui::close_v13_menu() {
+  if (v13_menu_) lv_obj_add_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN);
+}
+
+void Ui::open_v13_menu(int page) {
+  if (!v13_menu_) return;
+  lv_obj_clean(v13_menu_);
+  lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_OFF);
+  const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About"};
+  const int safe_page = std::clamp(page, 0, 4);
+  lv_obj_t* title = lv_label_create(v13_menu_);
+  lv_label_set_text(title, titles[safe_page]);
+  lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
+  lv_obj_set_style_text_font(title, &dosis_32, 0);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 28);
+
+  auto button = [&](const char* caption, int y, lv_event_cb_t callback) {
+    lv_obj_t* b = lv_button_create(v13_menu_);
+    lv_obj_set_size(b, 284, 43);
+    lv_obj_align(b, LV_ALIGN_TOP_MID, 0, y);
+    lv_obj_set_style_bg_color(b, lv_color_hex(0x146D73), 0);
+    lv_obj_t* label = lv_label_create(b);
+    lv_label_set_text(label, caption);
+    lv_obj_center(label);
+    lv_obj_add_event_cb(b, callback, LV_EVENT_CLICKED, this);
+  };
+  auto label = [&](const char* caption, int y) {
+    lv_obj_t* l = lv_label_create(v13_menu_);
+    lv_label_set_text(l, caption);
+    lv_obj_set_style_text_color(l, lv_color_hex(0xD8E8EA), 0);
+    lv_obj_align(l, LV_ALIGN_TOP_MID, 0, y);
+  };
+  auto dropdown = [&](const char* options, int y, int value, lv_event_cb_t cb) {
+    lv_obj_t* d = lv_dropdown_create(v13_menu_);
+    lv_obj_set_width(d, 284);
+    lv_obj_align(d, LV_ALIGN_TOP_MID, 0, y);
+    lv_dropdown_set_options(d, options);
+    lv_dropdown_set_selected(d, value);
+    lv_obj_add_event_cb(d, cb, LV_EVENT_VALUE_CHANGED, this);
+  };
+  if (safe_page == 0) {
+    button("Face Options", 82, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(1);
+    });
+    button("Display / Brightness", 137, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(2);
+    });
+    button("Wi-Fi / Web Config", 192, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(3);
+    });
+    button("About", 247, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
+    });
+    button("Close", 370, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->close_v13_menu();
+    });
+  } else if (safe_page == 1) {
+    label("Main face mode", 78);
+    dropdown("Randomize\nMood\nSingle", 104,
+      static_cast<int>(v13_preferences_.face_mode), [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      ui->v13_preferences_.face_mode = static_cast<V13FaceMode>(
+          lv_dropdown_get_selected(lv_event_get_target_obj(e)));
+      save_v13_menu_preferences(ui->v13_preferences_);
+    });
+    label("Main face", 161);
+    dropdown("Idle\nSad\nHappy\nGlossy\nSleepy\nSurprised", 187,
+      static_cast<int>(v13_preferences_.main_face), [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      ui->v13_preferences_.main_face = static_cast<V13Face>(
+          lv_dropdown_get_selected(lv_event_get_target_obj(e)));
+      ui->refresh_v13_face();
+      save_v13_menu_preferences(ui->v13_preferences_);
+    });
+    label("Face color", 245);
+    dropdown("Cyan\nBlue\nGreen\nOrange\nPurple\nRed\nWhite\nPink\nYellow", 270,
+      static_cast<int>(v13_preferences_.face_color), [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      ui->v13_preferences_.face_color = static_cast<V13FaceColor>(
+          lv_dropdown_get_selected(lv_event_get_target_obj(e)));
+      ui->refresh_v13_face();
+      save_v13_menu_preferences(ui->v13_preferences_);
+    });
+    button("Back", 375, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
+    });
+  } else if (safe_page == 2) {
+    label("Brightness", 96);
+    lv_obj_t* slider = lv_slider_create(v13_menu_);
+    lv_obj_set_size(slider, 270, 18);
+    lv_obj_align(slider, LV_ALIGN_TOP_MID, 0, 145);
+    lv_slider_set_range(slider, 10, 100);
+    lv_slider_set_value(slider, v13_preferences_.brightness, LV_ANIM_OFF);
+    lv_obj_add_event_cb(slider, [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      ui->v13_preferences_.brightness = lv_slider_get_value(lv_event_get_target_obj(e));
+      ui->set_brightness_percent(ui->v13_preferences_.brightness);
+      save_v13_menu_preferences(ui->v13_preferences_);
+    }, LV_EVENT_RELEASED, this);
+    label("Idle brightness and power rules remain in Web Config", 205);
+    button("Back", 375, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
+    });
+  } else if (safe_page == 3) {
+    label("Open Web Config using the device's Wi-Fi IP", 110);
+    label(last_snapshot_.wifi_ip.empty() ? "Wi-Fi not connected" :
+          last_snapshot_.wifi_ip.c_str(), 160);
+    button("Back", 375, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
+    });
+  } else {
+    label("Bambu SyKICK — v13 menu beta", 112);
+    label("Waveshare ESP32-S3 AMOLED 1.75", 162);
+    button("Back", 375, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
+    });
+  }
+  lv_obj_clear_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_move_foreground(v13_menu_);
+}
+
 void Ui::face_event_cb(lv_event_t* event) {
   auto* ui = static_cast<Ui*>(lv_event_get_user_data(event));
   if (ui != nullptr) ui->handle_face_event(event);
@@ -3969,6 +4115,9 @@ void Ui::handle_face_event(lv_event_t* event) {
   if (code == LV_EVENT_PRESSED) {
     face_touch_start_y_ = point.y;
     note_activity(false);
+  } else if (point.y - face_touch_start_y_ >= kSwipeThresholdPx) {
+    // v13 swipe-down opens the Control Center, not brightness control.
+    open_v13_menu(0);
   } else if (face_touch_start_y_ - point.y >= kSwipeThresholdPx) {
     // v13 swipe-up opens the existing printer dashboard.
     lv_obj_add_flag(face_home_, LV_OBJ_FLAG_HIDDEN);
