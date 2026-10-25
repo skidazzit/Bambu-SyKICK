@@ -236,7 +236,6 @@ class Ui {
   lv_obj_t* remaining_prefix_label_ = nullptr;
   lv_obj_t* remaining_label_ = nullptr;
   lv_obj_t* remaining_row_ = nullptr;
-  lv_obj_t* brightness_overlay_ = nullptr;
   lv_obj_t* page2_shell_ = nullptr;
   lv_obj_t* page2_image_ = nullptr;
   lv_obj_t* page2_note_ = nullptr;
@@ -261,7 +260,6 @@ class Ui {
   int user_brightness_percent_ = 80;
   int applied_brightness_percent_ = -1;
   bool gesture_active_ = false;
-  bool overlay_visible_ = false;
   bool scrolling_ = false;
   bool deferred_snapshot_pending_ = false;
   bool detail_visible_ = true;
@@ -287,7 +285,6 @@ class Ui {
   bool pulse_both_parts_ = false;
   lv_coord_t gesture_start_x_ = 0;
   lv_coord_t gesture_start_y_ = 0;
-  int gesture_start_brightness_ = 80;
   int active_page_ = 0;
   // Page the current swipe gesture started on; used for the page-advance
   // threshold decision when the finger is released (handle_pager_event).
