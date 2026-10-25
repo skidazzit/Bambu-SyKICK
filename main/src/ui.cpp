@@ -3705,6 +3705,11 @@ void Ui::handle_screen_event(lv_event_t* event) {
     if (swipe_locked) {
       return;
     }
+    if (dy <= -kSwipeThresholdPx && abs_dy > abs_dx + kGestureAxisLockMarginPx) {
+      // v13 Control Center on a downward swipe from the printer pages.
+      open_v13_menu(0);
+      return;
+    }
 
     // Horizontal page swiping is handled by the LVGL pager (flex-row +
     // LV_SCROLL_SNAP_NONE → handle_pager_event snaps to nearest page on SCROLL_END).
@@ -4030,6 +4035,16 @@ void Ui::open_v13_menu(int page) {
     });
     button("About", 247, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
+    });
+    button("Faces Home", 302, [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      if (ui->face_home_) {
+        lv_obj_clear_flag(ui->face_home_, LV_OBJ_FLAG_HIDDEN);
+        if (ui->face_renderer_) ui->face_renderer_->SetVisible(true);
+        ui->face_home_visible_ = true;
+        lv_obj_move_foreground(ui->face_home_);
+      }
+      ui->close_v13_menu();
     });
     button("Close", 370, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->close_v13_menu();
