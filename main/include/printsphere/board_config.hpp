@@ -41,7 +41,7 @@ constexpr gpio_num_t kQspiData3 = GPIO_NUM_47;
 constexpr int kAxp2101Address = 0;
 constexpr char kBoardName[] = "ESP32-S3-Touch-LCD-2.8C";
 #else
-#error "Unknown PrintSphere hardware variant"
+#error "Unknown Bambu SyKICK hardware variant"
 #endif
 
 }  // namespace printsphere::board
