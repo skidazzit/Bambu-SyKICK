@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <array>
 #include "esp_err.h"
 
 namespace printsphere {
@@ -33,6 +34,8 @@ struct V13MenuPreferences {
   uint8_t time_zone_choice = 1;
   bool clock_24_hour = false;
   bool show_clock_on_home = false;
+  // Order of six Control Center links; Sort Menu and About stay last.
+  std::array<uint8_t, 6> menu_order{{0, 1, 2, 3, 4, 5}};
 
   void clamp();
 };
