@@ -1,0 +1,53 @@
+name: Bambu SyKICK beta firmware
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/beta-firmware.yml"
+      - "CMakeLists.txt"
+      - "sdkconfig.defaults"
+      - "main/**"
+      - "components/**"
+      - "tools/package_initial_flash.py"
+
+permissions:
+  contents: read
+
+jobs:
+  build-amoled-beta:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ESP-IDF 6.0.2
+        uses: espressif/install-esp-idf-action@v1
+        with:
+          version: v6.0.2
+      - name: Build 1.75-inch AMOLED firmware
+        run: idf.py -DPRINTSPHERE_HW_VARIANT=amoled_1_75 build
+      - name: Package separate beta images
+        run: |
+          python3 tools/package_initial_flash.py \
+            --build-dir build \
+            --release-root release \
+            --beta \
+            --version v1.6.2-sykick-beta.1
+      - name: Check image headers and produce checksums
+        run: |
+          test -s release/beta/printsphere_full.bin
+          test -s release/beta/printsphere_ota.bin
+          python3 -m esptool image-info release/beta/printsphere_ota.bin
+          sha256sum release/beta/printsphere_full.bin release/beta/printsphere_ota.bin > release/beta/SHA256SUMS
+          python3 -c 'from pathlib import Path; p=Path("release/beta/printsphere_full.bin"); assert p.read_bytes()[0] == 0xE9, "Invalid bootloader image"'
+      - name: Upload beta files for review (not published)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bambu-SyKICK-beta-1.75-AMOLED
+          path: |
+            release/beta/printsphere_full.bin
+            release/beta/printsphere_ota.bin
+            release/beta/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
