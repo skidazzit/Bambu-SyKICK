@@ -35,7 +35,7 @@ You need a USB data cable and a desktop version of Chrome or Edge.
 If USB Wi-Fi setup is unavailable, connect to the fallback access point:
 
 - Wi-Fi name: `Bambu SyKICK-Setup`
-- Password: `printsphere` (unchanged in current firmware)
+- Password: `BambuSyKICK` (in new builds only)
 - Setup page: [http://192.168.4.1](http://192.168.4.1)
 
 Select your home Wi-Fi there. After Bambu SyKICK connects, continue through Web Config on its home-network IP address.
@@ -135,3 +135,5 @@ After initial setup, Web Config can be protected with a temporary six-digit PIN.
 ## Attribution and changes
 
 Bambu SyKICK is a non-commercial derivative of [PrintSphere by Cpt_Kirk](https://github.com/cptkirki/PrintSphere). The fork updates project branding and installer links. Existing internal build keys, setup credentials, and precompiled binary file names remain unchanged until new firmware is built and tested. See [LICENSE](LICENSE) for use and sharing terms.
+
+> **Firmware build status:** The installer currently serves original PrintSphere binaries. Source rebranding, the `Bambu-SyKICK-Setup` hotspot, and the new Wi-Fi password only take effect after a fresh ESP-IDF build. Do not assume the published binaries carry these changes.
