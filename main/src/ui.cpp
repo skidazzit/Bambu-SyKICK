@@ -20,6 +20,7 @@
 #include "driver/gpio.h"
 #include "png.h"
 #include "printsphere/board_config.hpp"
+#include "printsphere/audio_notifier.hpp"
 
 #if defined(PRINTSPHERE_HW_VARIANT_AMOLED_1_75)
 #include "bsp/esp32_s3_touch_amoled_1_75.h"
@@ -4024,6 +4025,11 @@ void Ui::refresh_v13_face() {
   face_renderer_->SetEmotion(faces[static_cast<uint8_t>(v13_preferences_.main_face)]);
 }
 
+void Ui::configure_sound_controls(ConfigStore* store, AudioNotifier* audio) {
+  sound_config_store_ = store;
+  sound_notifier_ = audio;
+}
+
 void Ui::close_v13_menu() {
   if (v13_menu_) lv_obj_add_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN);
 }
@@ -4034,8 +4040,8 @@ void Ui::open_v13_menu(int page) {
   v13_clock_date_label_ = nullptr;
   lv_obj_clean(v13_menu_);
   lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_OFF);
-  const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About", "Idle Face", "Clock"};
-  const int safe_page = std::clamp(page, 0, 6);
+  const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About", "Idle Face", "Clock", "Sound"};
+  const int safe_page = std::clamp(page, 0, 7);
   lv_obj_t* title = lv_label_create(v13_menu_);
   lv_label_set_text(title, titles[safe_page]);
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
@@ -4079,7 +4085,10 @@ void Ui::open_v13_menu(int page) {
     button("Clock", 247, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(6);
     });
-    button("Faces Home", 302, [](lv_event_t* e) {
+    button("Sound", 302, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(7);
+    });
+    button("Faces Home", 365, [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       if (ui->face_home_) {
         lv_obj_clear_flag(ui->face_home_, LV_OBJ_FLAG_HIDDEN);
@@ -4088,9 +4097,6 @@ void Ui::open_v13_menu(int page) {
         lv_obj_move_foreground(ui->face_home_);
       }
       ui->close_v13_menu();
-    });
-    button("Close", 370, [](lv_event_t* e) {
-      static_cast<Ui*>(lv_event_get_user_data(e))->close_v13_menu();
     });
   } else if (safe_page == 1) {
     label("Main face mode", 78);
@@ -4160,6 +4166,39 @@ void Ui::open_v13_menu(int page) {
       save_v13_menu_preferences(ui->v13_preferences_);
     }, LV_EVENT_RELEASED, this);
     label("Idle brightness and power rules remain in Web Config", 205);
+    button("Back", 375, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
+    });
+  } else if (safe_page == 7) {
+    label("Printer alert sounds", 87);
+    lv_obj_t* enabled = lv_switch_create(v13_menu_);
+    lv_obj_align(enabled, LV_ALIGN_TOP_MID, 0, 125);
+    if (sound_notifier_ != nullptr && sound_notifier_->enabled()) {
+      lv_obj_add_state(enabled, LV_STATE_CHECKED);
+    }
+    lv_obj_add_event_cb(enabled, [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      const bool on = lv_obj_has_state(lv_event_get_target_obj(e), LV_STATE_CHECKED);
+      if (ui->sound_notifier_) ui->sound_notifier_->set_enabled(on);
+      if (ui->sound_config_store_) ui->sound_config_store_->save_audio_enabled(on);
+    }, LV_EVENT_VALUE_CHANGED, this);
+    label("Volume", 206);
+    lv_obj_t* volume = lv_slider_create(v13_menu_);
+    lv_obj_set_size(volume, 270, 18);
+    lv_obj_align(volume, LV_ALIGN_TOP_MID, 0, 254);
+    lv_slider_set_range(volume, 0, 100);
+    lv_slider_set_value(volume, sound_notifier_ ? sound_notifier_->volume_percent() : 60,
+                        LV_ANIM_OFF);
+    lv_obj_add_event_cb(volume, [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      const int value = lv_slider_get_value(lv_event_get_target_obj(e));
+      if (ui->sound_notifier_) ui->sound_notifier_->set_volume_percent(value);
+      if (ui->sound_config_store_) ui->sound_config_store_->save_audio_volume_percent(value);
+    }, LV_EVENT_RELEASED, this);
+    button("Test sound", 307, [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      if (ui->sound_notifier_) ui->sound_notifier_->play_test();
+    });
     button("Back", 375, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
