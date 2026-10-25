@@ -21,7 +21,7 @@
 #elif defined(PRINTSPHERE_HW_VARIANT_LCD_2_8C)
 #include "bsp/esp32_s3_touch_lcd_2_8c.h"
 #else
-#error "Unknown PrintSphere hardware variant"
+#error "Unknown Bambu SyKICK hardware variant"
 #endif
 
 namespace printsphere {
@@ -254,7 +254,7 @@ Application::Application()
 
 void Application::run() {
   esp_log_level_set("mbedtls", ESP_LOG_WARN);
-  ESP_LOGI(kTag, "Bootstrapping native PrintSphere project");
+  ESP_LOGI(kTag, "Bootstrapping native Bambu SyKICK project");
 
   ESP_ERROR_CHECK(config_store_.initialize());
   // Apply persisted timezone before any localtime_r() consumer (UI ETA,
