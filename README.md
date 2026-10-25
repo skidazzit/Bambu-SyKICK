@@ -34,7 +34,7 @@ You need a USB data cable and a desktop version of Chrome or Edge.
 
 If USB Wi-Fi setup is unavailable, connect to the fallback access point:
 
-- Wi-Fi name: `Bambu SyKICK-Setup`
+- Wi-Fi name: `Bambu-SyKICK-Setup`
 - Password: `BambuSyKICK` (in new builds only)
 - Setup page: [http://192.168.4.1](http://192.168.4.1)
 
