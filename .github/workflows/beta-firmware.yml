@@ -26,7 +26,7 @@ jobs:
         with:
           version: v6.0.2
       - name: Build 1.75-inch AMOLED firmware
-        run: idf.py -DPRINTSPHERE_HW_VARIANT=amoled_1_75 build
+        run: idf.py -DPRINTSPHERE_HW_VARIANT=amoled_1_75 -DBAMBU_SYKICK_BETA=ON build
       - name: Package separate beta images
         run: |
           python3 tools/package_initial_flash.py \
