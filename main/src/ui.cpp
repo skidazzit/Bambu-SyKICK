@@ -2879,7 +2879,8 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_clear_flag(status_arc_, LV_OBJ_FLAG_SCROLLABLE);
   enable_touch_bubble(status_arc_);
 
-  progress_label_ = lv_label_create(lv_layer_top());
+  // Keep print progress below the v13 face layer; visible on printer pages only.
+  progress_label_ = lv_label_create(fixed_overlay_);
   set_label_text_if_changed(progress_label_, "--%");
   lv_obj_set_style_text_font(progress_label_, dosis40, 0);
   lv_obj_set_style_text_color(progress_label_, lv_color_hex(0xFFFFFF), 0);
