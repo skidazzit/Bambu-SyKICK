@@ -4104,29 +4104,63 @@ void Ui::open_v13_menu(int page) {
       if (ui->sound_notifier_) ui->sound_notifier_->set_volume_percent(value);
       if (ui->sound_config_store_) ui->sound_config_store_->save_audio_volume_percent(value);
     }, LV_EVENT_RELEASED, this);
+    // Match Focused Sort: fixed sliders above a round-safe scrolling card list.
+    lv_obj_remove_flag(v13_menu_, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_t* nav_list = lv_obj_create(v13_menu_);
+    lv_obj_set_size(nav_list, 316, 204);
+    lv_obj_align(nav_list, LV_ALIGN_TOP_MID, 0, 224);
+    lv_obj_set_style_bg_opa(nav_list, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(nav_list, 0, 0);
+    lv_obj_set_style_pad_all(nav_list, 0, 0);
+    lv_obj_set_scroll_dir(nav_list, LV_DIR_VER);
+    lv_obj_set_scrollbar_mode(nav_list, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_add_flag(nav_list, LV_OBJ_FLAG_SCROLLABLE);
+    auto nav_card = [&](const char* caption, int position, lv_event_cb_t callback) {
+      lv_obj_t* card = lv_button_create(nav_list);
+      lv_obj_set_size(card, 288, 62);
+      lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 4 + position * 72);
+      lv_obj_set_style_radius(card, 17, 0);
+      lv_obj_set_style_bg_color(card, lv_color_hex(0x0B252C), 0);
+      lv_obj_set_style_bg_color(card, lv_color_hex(0x0C4D58), LV_STATE_PRESSED);
+      lv_obj_set_style_border_width(card, 1, 0);
+      lv_obj_set_style_border_width(card, 2, LV_STATE_PRESSED);
+      lv_obj_set_style_border_color(card, lv_color_hex(0x22535A), 0);
+      lv_obj_set_style_border_color(card, lv_color_hex(0x32EBF7), LV_STATE_PRESSED);
+      lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_t* item_name = lv_label_create(card);
+      lv_label_set_text(item_name, caption);
+      lv_obj_set_style_text_font(item_name, &dosis_20, 0);
+      lv_obj_set_style_text_color(item_name, lv_color_hex(0xE9FFFF), 0);
+      lv_obj_align(item_name, LV_ALIGN_LEFT_MID, 13, 0);
+      lv_obj_t* chevron = lv_label_create(card);
+      lv_label_set_text(chevron, LV_SYMBOL_RIGHT);
+      lv_obj_set_style_text_color(chevron, lv_color_hex(0x32EBF7), 0);
+      lv_obj_align(chevron, LV_ALIGN_RIGHT_MID, -13, 0);
+      lv_obj_add_event_cb(card, callback, LV_EVENT_CLICKED, this);
+    };
     constexpr const char* kNames[] = {
-        "Face Options", "Display", "Wi-Fi / Web Config", "Clock", "Sound", "Faces Home"
+        "Face Options", "Display", "Wi-Fi", "Clock", "Sound", "Faces Home"
     };
     for (size_t position = 0; position < v13_preferences_.menu_order.size(); ++position) {
       const uint8_t id = v13_preferences_.menu_order[position];
-      const int y = 240 + static_cast<int>(position) * 50;
       switch (id) {
-        case 0: button(kNames[id], y, [](lv_event_t* e) {
+        case 0: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
           static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(1);
         }); break;
-        case 1: button(kNames[id], y, [](lv_event_t* e) {
+        case 1: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
           static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(2);
         }); break;
-        case 2: button(kNames[id], y, [](lv_event_t* e) {
+        case 2: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
           static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(3);
         }); break;
-        case 3: button(kNames[id], y, [](lv_event_t* e) {
+        case 3: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
           static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(6);
         }); break;
-        case 4: button(kNames[id], y, [](lv_event_t* e) {
+        case 4: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
           static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(7);
         }); break;
-        case 5: button(kNames[id], y, [](lv_event_t* e) {
+        case 5: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
           auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
           if (ui->face_home_) {
             lv_obj_clear_flag(ui->face_home_, LV_OBJ_FLAG_HIDDEN);
@@ -4138,10 +4172,10 @@ void Ui::open_v13_menu(int page) {
         }); break;
       }
     }
-    button("Sort Menu", 540, [](lv_event_t* e) {
+    nav_card("Sort Menu", 6, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(8);
     });
-    button("About", 590, [](lv_event_t* e) {
+    nav_card("About", 7, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
     });
   } else if (safe_page == 8) {
@@ -4237,7 +4271,7 @@ void Ui::open_v13_menu(int page) {
     auto footer = [&](const char* caption, int x, lv_event_cb_t callback) {
       lv_obj_t* control = lv_button_create(v13_menu_);
       lv_obj_set_size(control, 131, 42);
-      lv_obj_align(control, LV_ALIGN_TOP_MID, x, 388);
+      lv_obj_align(control, LV_ALIGN_TOP_MID, x, 364);
       lv_obj_set_style_radius(control, 20, 0);
       lv_obj_set_style_bg_color(control, lv_color_hex(0x146D73), 0);
       lv_obj_t* caption_label = lv_label_create(control);
