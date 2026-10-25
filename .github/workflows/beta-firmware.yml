@@ -3,7 +3,7 @@ name: Bambu SyKICK beta firmware
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, beta/v13-menus]
     paths:
       - ".github/workflows/beta-firmware.yml"
       - "CMakeLists.txt"
@@ -44,7 +44,7 @@ jobs:
       - name: Upload beta files for review (not published)
         uses: actions/upload-artifact@v4
         with:
-          name: Bambu-SyKICK-beta-1.75-AMOLED
+          name: Bambu-SyKICK-beta-1.75-AMOLED-${{ github.ref_name }}
           path: |
             release/beta/printsphere_full.bin
             release/beta/printsphere_ota.bin
