@@ -4042,8 +4042,8 @@ void Ui::open_v13_menu(int page) {
   lv_obj_clean(v13_menu_);
   lv_obj_scroll_to_y(v13_menu_, 0, LV_ANIM_OFF);
   lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_OFF);
-  const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About", "Idle Face", "Clock", "Sound"};
-  const int safe_page = std::clamp(page, 0, 7);
+  const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About", "Idle Face", "Clock", "Sound", "Sort Menu"};
+  const int safe_page = std::clamp(page, 0, 8);
   lv_obj_t* title = lv_label_create(v13_menu_);
   lv_label_set_text(title, titles[safe_page]);
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
@@ -4104,33 +4104,90 @@ void Ui::open_v13_menu(int page) {
       if (ui->sound_notifier_) ui->sound_notifier_->set_volume_percent(value);
       if (ui->sound_config_store_) ui->sound_config_store_->save_audio_volume_percent(value);
     }, LV_EVENT_RELEASED, this);
-    button("Face Options", 240, [](lv_event_t* e) {
-      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(1);
-    });
-    button("Display / Brightness", 290, [](lv_event_t* e) {
-      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(2);
-    });
-    button("Wi-Fi / Web Config", 340, [](lv_event_t* e) {
-      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(3);
-    });
-    button("Clock", 390, [](lv_event_t* e) {
-      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(6);
-    });
-    button("Sound", 440, [](lv_event_t* e) {
-      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(7);
-    });
-    button("Faces Home", 490, [](lv_event_t* e) {
-      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
-      if (ui->face_home_) {
-        lv_obj_clear_flag(ui->face_home_, LV_OBJ_FLAG_HIDDEN);
-        if (ui->face_renderer_) ui->face_renderer_->SetVisible(true);
-        ui->face_home_visible_ = true;
-        lv_obj_move_foreground(ui->face_home_);
+    constexpr const char* kNames[] = {
+        "Face Options", "Display", "Wi-Fi / Web Config", "Clock", "Sound", "Faces Home"
+    };
+    for (size_t position = 0; position < v13_preferences_.menu_order.size(); ++position) {
+      const uint8_t id = v13_preferences_.menu_order[position];
+      const int y = 240 + static_cast<int>(position) * 50;
+      switch (id) {
+        case 0: button(kNames[id], y, [](lv_event_t* e) {
+          static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(1);
+        }); break;
+        case 1: button(kNames[id], y, [](lv_event_t* e) {
+          static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(2);
+        }); break;
+        case 2: button(kNames[id], y, [](lv_event_t* e) {
+          static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(3);
+        }); break;
+        case 3: button(kNames[id], y, [](lv_event_t* e) {
+          static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(6);
+        }); break;
+        case 4: button(kNames[id], y, [](lv_event_t* e) {
+          static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(7);
+        }); break;
+        case 5: button(kNames[id], y, [](lv_event_t* e) {
+          auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+          if (ui->face_home_) {
+            lv_obj_clear_flag(ui->face_home_, LV_OBJ_FLAG_HIDDEN);
+            if (ui->face_renderer_) ui->face_renderer_->SetVisible(true);
+            ui->face_home_visible_ = true;
+            lv_obj_move_foreground(ui->face_home_);
+          }
+          ui->close_v13_menu();
+        }); break;
       }
-      ui->close_v13_menu();
+    }
+    button("Sort Menu", 540, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(8);
     });
-    button("About", 540, [](lv_event_t* e) {
+    button("About", 590, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
+    });
+  } else if (safe_page == 8) {
+    label("Choose a menu item", 84);
+    constexpr const char* kNames[] = {
+        "Face Options", "Display", "Wi-Fi / Web Config", "Clock", "Sound", "Faces Home"
+    };
+    std::string options;
+    for (uint8_t id : v13_preferences_.menu_order) {
+      if (!options.empty()) options += "\n";
+      options += kNames[id];
+    }
+    dropdown(options.c_str(), 116, v13_sort_selected_, [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      ui->v13_sort_selected_ = static_cast<uint8_t>(
+          lv_dropdown_get_selected(lv_event_get_target_obj(e)));
+    });
+    button("Move Up", 186, [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      if (ui->v13_sort_selected_ == 0) return;
+      const uint8_t selected = ui->v13_sort_selected_;
+      std::swap(ui->v13_preferences_.menu_order[selected],
+                ui->v13_preferences_.menu_order[selected - 1]);
+      ui->v13_sort_selected_--;
+      save_v13_menu_preferences(ui->v13_preferences_);
+      ui->open_v13_menu(8);
+    });
+    button("Move Down", 244, [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      const uint8_t selected = ui->v13_sort_selected_;
+      if (selected + 1 >= ui->v13_preferences_.menu_order.size()) return;
+      std::swap(ui->v13_preferences_.menu_order[selected],
+                ui->v13_preferences_.menu_order[selected + 1]);
+      ui->v13_sort_selected_++;
+      save_v13_menu_preferences(ui->v13_preferences_);
+      ui->open_v13_menu(8);
+    });
+    button("Reset Order", 302, [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      ui->v13_preferences_.menu_order = {{0, 1, 2, 3, 4, 5}};
+      ui->v13_sort_selected_ = 0;
+      save_v13_menu_preferences(ui->v13_preferences_);
+      ui->open_v13_menu(8);
+    });
+    button("Back", 375, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   } else if (safe_page == 1) {
     label("Main face mode", 78);
