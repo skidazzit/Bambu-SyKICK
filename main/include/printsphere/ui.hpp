@@ -17,6 +17,8 @@
 
 namespace printsphere {
 
+class AudioNotifier;
+
 enum class ScreenPowerMode : uint8_t {
   kAwake,
   kDimmed,
@@ -40,6 +42,7 @@ class Ui {
   static constexpr int kPageIdxLast = kPageIdxCamera;
 
   void set_display_rotation(DisplayRotation rotation);
+  void configure_sound_controls(ConfigStore* store, AudioNotifier* audio);
   esp_err_t initialize();
   void set_arc_color_scheme(const ArcColorScheme& colors);
   void apply_snapshot(const PrinterSnapshot& snapshot);
@@ -165,6 +168,8 @@ class Ui {
   lv_obj_t* pager_ = nullptr;
   lv_obj_t* face_home_ = nullptr;
   lv_obj_t* v13_menu_ = nullptr;
+  ConfigStore* sound_config_store_ = nullptr;
+  AudioNotifier* sound_notifier_ = nullptr;
   lv_obj_t* v13_clock_time_label_ = nullptr;
   lv_obj_t* v13_clock_date_label_ = nullptr;
   std::unique_ptr<VideoFace> face_renderer_;
