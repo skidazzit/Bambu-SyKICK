@@ -3977,6 +3977,18 @@ void Ui::v13_face_timer_cb(lv_timer_t* timer) {
 }
 
 void Ui::update_v13_face_tick() {
+  if (v13_clock_time_label_ != nullptr && v13_clock_date_label_ != nullptr &&
+      v13_menu_ != nullptr && !lv_obj_has_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN)) {
+    const time_t now = time(nullptr);
+    struct tm local_time{};
+    localtime_r(&now, &local_time);
+    char time_text[32] = {};
+    char date_text[48] = {};
+    strftime(time_text, sizeof(time_text), "%I:%M %p", &local_time);
+    strftime(date_text, sizeof(date_text), "%A, %B %d", &local_time);
+    set_label_text_if_changed(v13_clock_time_label_, now > 1700000000 ? time_text : "Syncing time...");
+    set_label_text_if_changed(v13_clock_date_label_, now > 1700000000 ? date_text : "Connect to Wi-Fi for time");
+  }
   if (!face_renderer_ || !face_home_visible_) return;
   v13_face_options_.mode = static_cast<int>(v13_preferences_.face_mode);
   v13_face_options_.main = static_cast<int>(v13_preferences_.main_face);
@@ -4018,10 +4030,12 @@ void Ui::close_v13_menu() {
 
 void Ui::open_v13_menu(int page) {
   if (!v13_menu_) return;
+  v13_clock_time_label_ = nullptr;
+  v13_clock_date_label_ = nullptr;
   lv_obj_clean(v13_menu_);
   lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_OFF);
-  const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About", "Idle Face"};
-  const int safe_page = std::clamp(page, 0, 5);
+  const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About", "Idle Face", "Clock"};
+  const int safe_page = std::clamp(page, 0, 6);
   lv_obj_t* title = lv_label_create(v13_menu_);
   lv_label_set_text(title, titles[safe_page]);
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
@@ -4062,8 +4076,8 @@ void Ui::open_v13_menu(int page) {
     button("Wi-Fi / Web Config", 192, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(3);
     });
-    button("About", 247, [](lv_event_t* e) {
-      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
+    button("Clock", 247, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(6);
     });
     button("Faces Home", 302, [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
@@ -4149,10 +4163,35 @@ void Ui::open_v13_menu(int page) {
     button("Back", 375, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
+  } else if (safe_page == 6) {
+    time_t now = time(nullptr);
+    struct tm local_time{};
+    localtime_r(&now, &local_time);
+    char time_text[32] = {};
+    char date_text[48] = {};
+    strftime(time_text, sizeof(time_text), "%I:%M %p", &local_time);
+    strftime(date_text, sizeof(date_text), "%A, %B %d", &local_time);
+    lv_obj_t* clock_time = lv_label_create(v13_menu_);
+    lv_label_set_text(clock_time, now > 1700000000 ? time_text : "Syncing time...");
+    lv_obj_set_style_text_font(clock_time, &dosis_40, 0);
+    lv_obj_set_style_text_color(clock_time, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_align(clock_time, LV_ALIGN_CENTER, 0, -36);
+    lv_obj_t* clock_date = lv_label_create(v13_menu_);
+    lv_label_set_text(clock_date, now > 1700000000 ? date_text : "Connect to Wi-Fi for time");
+    lv_obj_set_style_text_color(clock_date, lv_color_hex(0xD8E8EA), 0);
+    lv_obj_align(clock_date, LV_ALIGN_CENTER, 0, 18);
+    v13_clock_time_label_ = clock_time;
+    v13_clock_date_label_ = clock_date;
+    button("Back", 375, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
+    });
   } else if (safe_page == 3) {
     label("Open Web Config using the device's Wi-Fi IP", 110);
     label(last_snapshot_.wifi_ip.empty() ? "Wi-Fi not connected" :
           last_snapshot_.wifi_ip.c_str(), 160);
+    button("About", 285, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
+    });
     button("Back", 375, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
