@@ -5,8 +5,8 @@
 
 namespace {
 constexpr float Pi = 3.14159265f;
-// Enlarge all face artwork by 10% while keeping its center fixed on the round screen.
-constexpr float kFaceSizeScale = 1.10f;
+// Enlarge all face artwork by 20% from the previous 1.10x size, centered on screen.
+constexpr float kFaceSizeScale = 1.32f;
 constexpr float kPainterBaseScale = 1.16f;
 struct Painter {
     lv_layer_t* layer;
@@ -229,7 +229,7 @@ void VideoFace::Draw(lv_event_t* event) {
         }
     } else if (emotion_ == "look_around") {
         // Preview-approved five-second gaze: the eye facing the turn grows 35%.
-        // The base eyes retain the approved 10% face-size increase.
+        // Base eyes use the new 1.32x face scale; gaze focus still adds 35%.
         const float seconds = std::fmod(t, 5.2f);
         auto ease = [seconds](float start, float end) {
             const float progress = std::clamp((seconds - start) / (end - start), 0.f, 1.f);
