@@ -357,6 +357,13 @@ void set_clickable(lv_obj_t* obj, bool clickable) {
   }
 }
 
+bool supports_chamber_light(const PrinterSnapshot& snapshot) {
+  // Cloud-first P2S setups can know their model before a light report arrives.
+  return snapshot.chamber_light_supported ||
+         printer_model_has_chamber_light(snapshot.local_model) ||
+         printer_model_has_chamber_light(snapshot.cloud_model);
+}
+
 void enable_touch_bubble(lv_obj_t* obj) {
   if (obj == nullptr) {
     return;
@@ -2264,7 +2271,7 @@ void Ui::apply_snapshot_locked(const PrinterSnapshot& snapshot, bool force_ring_
 
   // A large bottom touch target replaces the layer counter on the camera page.
   // Reuse the existing chamber-light command path and its optimistic state.
-  const int light_state = !snapshot.chamber_light_supported ? -1
+  const int light_state = !supports_chamber_light(snapshot) ? -1
       : !snapshot.chamber_light_state_known ? 0
       : (snapshot.chamber_light_on ? 2 : 1);
   if (page3_last_light_state_ != light_state) {
@@ -2286,7 +2293,7 @@ void Ui::apply_snapshot_locked(const PrinterSnapshot& snapshot, bool force_ring_
   }
 
   show_logo_ = should_show_logo(snapshot);
-  const bool chamber_light_clickable = snapshot.chamber_light_supported;
+  const bool chamber_light_clickable = supports_chamber_light(snapshot);
   if (logo_clickable_ != chamber_light_clickable) {
     set_clickable(logo_badge_, chamber_light_clickable);
     logo_clickable_ = chamber_light_clickable;
@@ -3901,7 +3908,7 @@ void Ui::handle_logo_event(lv_event_t* event) {
     return;
   }
 
-  if (scrolling_ || !show_logo_ || !last_snapshot_.chamber_light_supported) {
+  if (scrolling_ || !show_logo_ || !supports_chamber_light(last_snapshot_)) {
     return;
   }
 
@@ -4650,12 +4657,18 @@ void Ui::screen_event_cb(lv_event_t* event) {
 
 void Ui::camera_light_button_event_cb(lv_event_t* event) {
   auto* ui = static_cast<Ui*>(lv_event_get_user_data(event));
-  if (ui != nullptr && lv_event_get_code(event) == LV_EVENT_CLICKED &&
-      !ui->scrolling_ && ui->active_page_ == kPageIdxCamera &&
-      ui->last_snapshot_.chamber_light_supported) {
-    ui->note_activity(false);
-    ui->chamber_light_toggle_requested_.store(true);
+  if (ui == nullptr || lv_event_get_code(event) != LV_EVENT_CLICKED) {
+    return;
   }
+  const bool ready = !ui->scrolling_ && ui->active_page_ == kPageIdxCamera &&
+                     supports_chamber_light(ui->last_snapshot_);
+  ESP_LOGI(kTag, "Camera light button tapped (ready=%d page=%d)",
+           ready, ui->active_page_);
+  if (!ready) {
+    return;
+  }
+  ui->note_activity(false);
+  ui->chamber_light_toggle_requested_.store(true);
 }
 
 void Ui::logo_event_cb(lv_event_t* event) {

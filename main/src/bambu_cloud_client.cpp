@@ -1139,10 +1139,13 @@ std::string build_ledctrl_payload(const char* node, bool on) {
     return {};
   }
 
-  char payload[192];
+  // Bambu's ledctrl request requires timing fields even for steady on/off.
+  char payload[256];
   std::snprintf(payload, sizeof(payload),
                 "{\"system\":{\"sequence_id\":\"%u\",\"command\":\"ledctrl\","
-                "\"led_node\":\"%s\",\"led_mode\":\"%s\"}}",
+                "\"led_node\":\"%s\",\"led_mode\":\"%s\","
+                "\"led_on_time\":500,\"led_off_time\":500,"
+                "\"loop_times\":0,\"interval_time\":0}}",
                 static_cast<unsigned int>(esp_random()), node, on ? "on" : "off");
   return payload;
 }

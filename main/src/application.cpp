@@ -118,8 +118,6 @@ struct ChamberLightCommandPlan {
 };
 
 ChamberLightCommandPlan chamber_light_command_plan(SourceMode source_mode,
-                                                   bool hybrid_prefers_cloud,
-                                                   bool hybrid_local_status_supported_now,
                                                    bool local_network_ready,
                                                    bool local_printer_enabled,
                                                    bool cloud_network_ready,
@@ -135,14 +133,12 @@ ChamberLightCommandPlan chamber_light_command_plan(SourceMode source_mode,
       break;
     case SourceMode::kHybrid:
     default:
-      plan.try_local =
-          !hybrid_prefers_cloud && hybrid_local_status_supported_now && local_network_ready &&
-          local_printer_enabled &&
-          (local_snapshot.local_connected ||
-           printer_model_has_chamber_light(local_snapshot.local_model));
-      plan.try_cloud =
-          cloud_network_ready &&
-          (cloud_snapshot.connected || printer_model_has_chamber_light(cloud_snapshot.model));
+      // Cloud status preference must not block LAN control commands. The P2S
+      // can report via cloud while its local MQTT command path remains ready.
+      // Try LAN first when connected, then fall back to cloud if unavailable.
+      plan.try_local = local_network_ready && local_printer_enabled &&
+                       local_snapshot.local_connected;
+      plan.try_cloud = cloud_network_ready && cloud_snapshot.connected;
       break;
   }
   return plan;
@@ -606,20 +602,23 @@ void Application::run() {
           !snapshot.chamber_light_state_known || !snapshot.chamber_light_on;
       bool command_sent = false;
       const ChamberLightCommandPlan light_plan =
-          chamber_light_command_plan(source_mode_, hybrid_prefers_cloud,
-                                     hybrid_local_status_supported_now, local_network_ready,
+          chamber_light_command_plan(source_mode_, local_network_ready,
                                      local_printer_enabled_, cloud_network_ready,
                                      local_snapshot, cloud_snapshot);
+      ESP_LOGI(kTag, "Camera light toggle: target=%s local=%d cloud=%d",
+               requested_on ? "on" : "off", light_plan.try_local, light_plan.try_cloud);
 
       if (light_plan.try_local) {
         command_sent = printer_client_.set_chamber_light(requested_on);
         if (command_sent) {
+          ESP_LOGI(kTag, "Chamber light command queued on LAN");
           mark_chamber_light_state(local_snapshot, requested_on);
         }
       }
       if (!command_sent && light_plan.try_cloud) {
         command_sent = cloud_client_.set_chamber_light(requested_on);
         if (command_sent) {
+          ESP_LOGI(kTag, "Chamber light command queued on cloud");
           mark_chamber_light_state(cloud_snapshot, requested_on);
         }
       }
