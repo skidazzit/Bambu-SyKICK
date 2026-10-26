@@ -36,6 +36,9 @@ extern const lv_font_t dosis_20;
 extern const lv_font_t dosis_32;
 extern const lv_font_t dosis_40;
 extern const lv_font_t lv_font_montserrat_20;
+extern const lv_font_t syk_dejavu_18;
+extern const lv_font_t syk_dejavu_20;
+extern const lv_font_t syk_dejavu_32;
 extern const lv_font_t mdi_30;
 extern const lv_font_t mdi_40;
 }
@@ -3240,6 +3243,7 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_set_size(v13_menu_, board::kDisplayWidth, board::kDisplayHeight);
   lv_obj_center(v13_menu_);
   lv_obj_set_style_bg_color(v13_menu_, lv_color_hex(0x080F16), 0);
+  lv_obj_set_style_text_font(v13_menu_, &syk_dejavu_20, 0);
   lv_obj_set_style_bg_opa(v13_menu_, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(v13_menu_, 0, 0);
   lv_obj_set_style_pad_all(v13_menu_, 0, 0);
@@ -4047,7 +4051,7 @@ void Ui::open_v13_menu(int page) {
   lv_obj_t* title = lv_label_create(v13_menu_);
   lv_label_set_text(title, titles[safe_page]);
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_32, 0);
+  lv_obj_set_style_text_font(title, &syk_dejavu_32, 0);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 28);
 
   auto button = [&](const char* caption, int y, lv_event_cb_t callback) {
@@ -4060,7 +4064,7 @@ void Ui::open_v13_menu(int page) {
     lv_obj_set_style_border_color(b, lv_color_hex(0x29DBE9), 0);
     lv_obj_t* label = lv_label_create(b);
     lv_label_set_text(label, caption);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(label, &syk_dejavu_20, 0);
     lv_obj_center(label);
     lv_obj_add_event_cb(b, callback, LV_EVENT_CLICKED, this);
   };
@@ -4068,7 +4072,7 @@ void Ui::open_v13_menu(int page) {
     lv_obj_t* l = lv_label_create(v13_menu_);
     lv_label_set_text(l, caption);
     lv_obj_set_style_text_color(l, lv_color_hex(0xBBD4DA), 0);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_font(l, &syk_dejavu_18, 0);
     lv_obj_align(l, LV_ALIGN_TOP_MID, 0, y);
   };
   auto dropdown = [&](const char* options, int y, int value, lv_event_cb_t cb) {
@@ -4076,7 +4080,7 @@ void Ui::open_v13_menu(int page) {
     lv_obj_set_width(d, 284);
     lv_obj_align(d, LV_ALIGN_TOP_MID, 0, y);
     lv_dropdown_set_options(d, options);
-    lv_obj_set_style_text_font(d, &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_set_style_text_font(d, &syk_dejavu_20, LV_PART_MAIN);
     lv_dropdown_set_selected(d, value);
     lv_obj_add_event_cb(d, cb, LV_EVENT_VALUE_CHANGED, this);
   };
@@ -4139,7 +4143,7 @@ void Ui::open_v13_menu(int page) {
       lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
       lv_obj_t* item_name = lv_label_create(card);
       lv_label_set_text(item_name, caption);
-      lv_obj_set_style_text_font(item_name, &lv_font_montserrat_20, 0);
+      lv_obj_set_style_text_font(item_name, &syk_dejavu_20, 0);
       lv_obj_set_style_text_color(item_name, lv_color_hex(0xE9FFFF), 0);
       lv_obj_align(item_name, LV_ALIGN_LEFT_MID, 13, 0);
       lv_obj_t* chevron = lv_label_create(card);
@@ -4197,7 +4201,7 @@ void Ui::open_v13_menu(int page) {
     lv_obj_set_style_border_color(menu_back, lv_color_hex(0x29DBE9), 0);
     lv_obj_t* menu_back_label = lv_label_create(menu_back);
     lv_label_set_text(menu_back_label, LV_SYMBOL_LEFT "  Back");
-    lv_obj_set_style_text_font(menu_back_label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(menu_back_label, &syk_dejavu_20, 0);
     lv_obj_center(menu_back_label);
     lv_obj_add_event_cb(menu_back, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->close_v13_menu();
@@ -4241,7 +4245,7 @@ void Ui::open_v13_menu(int page) {
       lv_obj_t* name = lv_label_create(row);
       lv_label_set_text(name, kSortNames[item_id]);
       lv_obj_set_style_text_color(name, lv_color_hex(focused ? 0xFFFFFF : 0xB8D4D8), 0);
-      lv_obj_set_style_text_font(name, &lv_font_montserrat_20, 0);
+      lv_obj_set_style_text_font(name, &syk_dejavu_20, 0);
       lv_obj_align(name, LV_ALIGN_LEFT_MID, 13, 0);
 
       auto arrow = [&](bool move_up, int inset) {
@@ -4302,7 +4306,7 @@ void Ui::open_v13_menu(int page) {
       lv_obj_set_style_border_color(control, lv_color_hex(0x29DBE9), 0);
       lv_obj_t* caption_label = lv_label_create(control);
       lv_label_set_text(caption_label, caption);
-      lv_obj_set_style_text_font(caption_label, &lv_font_montserrat_20, 0);
+      lv_obj_set_style_text_font(caption_label, &syk_dejavu_20, 0);
       lv_obj_center(caption_label);
       lv_obj_add_event_cb(control, callback, LV_EVENT_CLICKED, this);
     };
