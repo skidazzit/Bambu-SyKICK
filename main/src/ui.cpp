@@ -17,6 +17,8 @@
 #include "esp_random.h"
 #include "esp_memory_utils.h"
 #include "esp_timer.h"
+#include "esp_system.h"
+#include "nvs_flash.h"
 #include "driver/gpio.h"
 #include "png.h"
 #include "printsphere/board_config.hpp"
@@ -1228,6 +1230,84 @@ void card_reveal_y_exec_cb(void* obj, int32_t val) {
 // Cascading reveal: fade-in per card
 void card_reveal_opa_exec_cb(void* obj, int32_t val) {
   lv_obj_set_style_opa(static_cast<lv_obj_t*>(obj), static_cast<lv_opa_t>(val), 0);
+}
+
+
+void show_device_action_confirmation(lv_obj_t* parent, bool factory_reset) {
+  // A centered modal keeps both choices inside the 466px round touch area.
+  lv_obj_t* shade = lv_obj_create(parent);
+  lv_obj_set_size(shade, board::kDisplayWidth, board::kDisplayHeight);
+  lv_obj_center(shade);
+  lv_obj_set_style_bg_color(shade, lv_color_hex(0x080F16), 0);
+  lv_obj_set_style_bg_opa(shade, 230, 0);
+  lv_obj_set_style_border_width(shade, 0, 0);
+  lv_obj_set_style_pad_all(shade, 0, 0);
+  lv_obj_remove_flag(shade, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(shade, LV_OBJ_FLAG_CLICKABLE);
+
+  lv_obj_t* dialog = lv_obj_create(shade);
+  lv_obj_set_size(dialog, 330, 240);
+  lv_obj_center(dialog);
+  lv_obj_set_style_radius(dialog, 25, 0);
+  lv_obj_set_style_bg_color(dialog, lv_color_hex(0x10424D), 0);
+  lv_obj_set_style_border_width(dialog, 2, 0);
+  lv_obj_set_style_border_color(dialog,
+                                lv_color_hex(factory_reset ? 0xF87171 : 0x29DBE9), 0);
+  lv_obj_set_style_pad_all(dialog, 0, 0);
+  lv_obj_remove_flag(dialog, LV_OBJ_FLAG_SCROLLABLE);
+
+  lv_obj_t* title = lv_label_create(dialog);
+  lv_label_set_text(title, factory_reset ? "Factory Reset?" : "Restart Device?");
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
+  lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 26);
+
+  lv_obj_t* detail = lv_label_create(dialog);
+  lv_label_set_text(detail, factory_reset
+      ? "Erase Wi-Fi, printer and menu\nsettings? This cannot be undone."
+      : "Restart now? Your saved Wi-Fi\nand printer settings will remain.");
+  lv_obj_set_style_text_font(detail, &lv_font_montserrat_18, 0);
+  lv_obj_set_style_text_color(detail, lv_color_hex(0xD3E8EA), 0);
+  lv_obj_set_style_text_align(detail, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_align(detail, LV_ALIGN_TOP_MID, 0, 89);
+
+  auto action = [&](const char* caption, int x, uint32_t color, lv_event_cb_t cb,
+                    void* callback_data) {
+    lv_obj_t* control = lv_button_create(dialog);
+    lv_obj_set_size(control, 132, 50);
+    lv_obj_align(control, LV_ALIGN_TOP_MID, x, 164);
+    lv_obj_set_style_radius(control, 18, 0);
+    lv_obj_set_style_bg_color(control, lv_color_hex(color), 0);
+    lv_obj_set_style_border_width(control, 1, 0);
+    lv_obj_set_style_border_color(control, lv_color_hex(0x78AAB2), 0);
+    lv_obj_t* caption_label = lv_label_create(control);
+    lv_label_set_text(caption_label, caption);
+    lv_obj_set_style_text_font(caption_label, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_color(caption_label, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_center(caption_label);
+    lv_obj_add_event_cb(control, cb, LV_EVENT_CLICKED, callback_data);
+  };
+  action("Cancel", -74, 0x22525D, [](lv_event_t* e) {
+    // Let the next menu redraw free the hidden dialog safely.
+    lv_obj_add_flag(static_cast<lv_obj_t*>(lv_event_get_user_data(e)),
+                    LV_OBJ_FLAG_HIDDEN);
+  }, shade);
+  if (factory_reset) {
+    action("Erase Now", 74, 0x9E333C, [](lv_event_t* e) {
+      const esp_err_t result = nvs_flash_erase();
+      if (result == ESP_OK) {
+        ESP_LOGW(kTag, "Factory reset: NVS settings erased; restarting");
+        esp_restart();
+      }
+      ESP_LOGE(kTag, "Factory reset failed: %s", esp_err_to_name(result));
+      lv_obj_t* message = static_cast<lv_obj_t*>(lv_event_get_user_data(e));
+      lv_label_set_text(message, "Reset failed.\nPlease try again.");
+    }, detail);
+  } else {
+    action("Restart", 74, 0x087A8C, [](lv_event_t*) {
+      esp_restart();
+    }, nullptr);
+  }
 }
 
 }  // namespace
@@ -4188,21 +4268,27 @@ void Ui::open_v13_menu(int page) {
     nav_card("About", 7, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
     });
-    // Fixed round-safe exit: stays visible while menu cards scroll.
-    lv_obj_t* menu_back = lv_button_create(v13_menu_);
-    lv_obj_set_size(menu_back, 185, 44);
-    lv_obj_align(menu_back, LV_ALIGN_TOP_MID, 0, 372);
-    lv_obj_set_style_radius(menu_back, 20, 0);
-    lv_obj_set_style_bg_color(menu_back, lv_color_hex(0x10424D), 0);
-    lv_obj_set_style_border_width(menu_back, 1, 0);
-    lv_obj_set_style_border_color(menu_back, lv_color_hex(0x29DBE9), 0);
-    lv_obj_t* menu_back_label = lv_label_create(menu_back);
-    lv_label_set_text(menu_back_label, LV_SYMBOL_LEFT "  Back");
-    lv_obj_set_style_text_font(menu_back_label, &lv_font_montserrat_20, 0);
-    lv_obj_center(menu_back_label);
-    lv_obj_add_event_cb(menu_back, [](lv_event_t* e) {
+    // Two fixed touch targets in the round-safe footer.
+    auto menu_footer = [&](const char* caption, int x, lv_event_cb_t callback) {
+      lv_obj_t* control = lv_button_create(v13_menu_);
+      lv_obj_set_size(control, 131, 42);
+      lv_obj_align(control, LV_ALIGN_TOP_MID, x, 364);
+      lv_obj_set_style_radius(control, 20, 0);
+      lv_obj_set_style_bg_color(control, lv_color_hex(0x10424D), 0);
+      lv_obj_set_style_border_width(control, 1, 0);
+      lv_obj_set_style_border_color(control, lv_color_hex(0x29DBE9), 0);
+      lv_obj_t* caption_label = lv_label_create(control);
+      lv_label_set_text(caption_label, caption);
+      lv_obj_set_style_text_font(caption_label, &lv_font_montserrat_18, 0);
+      lv_obj_center(caption_label);
+      lv_obj_add_event_cb(control, callback, LV_EVENT_CLICKED, this);
+    };
+    menu_footer("Restart", -73, [](lv_event_t* e) {
+      show_device_action_confirmation(lv_obj_get_parent(lv_event_get_target_obj(e)), false);
+    });
+    menu_footer(LV_SYMBOL_LEFT " Back", 73, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->close_v13_menu();
-    }, LV_EVENT_CLICKED, this);
+    });
   } else if (safe_page == 8) {
     // Focused sort: a round-screen-safe scrolling list with 52px arrow targets.
     lv_obj_remove_flag(v13_menu_, LV_OBJ_FLAG_SCROLLABLE);
@@ -4437,6 +4523,22 @@ void Ui::open_v13_menu(int page) {
     label(memory_text, 187);
     label(last_snapshot_.wifi_ip.empty() ? "IP: Not connected" :
           last_snapshot_.wifi_ip.c_str(), 242);
+    // A separate danger action opens a second confirmation before data is erased.
+    lv_obj_t* reset_button = lv_button_create(v13_menu_);
+    lv_obj_set_size(reset_button, 284, 43);
+    lv_obj_align(reset_button, LV_ALIGN_TOP_MID, 0, 307);
+    lv_obj_set_style_radius(reset_button, 16, 0);
+    lv_obj_set_style_bg_color(reset_button, lv_color_hex(0x44242A), 0);
+    lv_obj_set_style_border_width(reset_button, 1, 0);
+    lv_obj_set_style_border_color(reset_button, lv_color_hex(0xF87171), 0);
+    lv_obj_t* reset_label = lv_label_create(reset_button);
+    lv_label_set_text(reset_label, "Factory Reset");
+    lv_obj_set_style_text_color(reset_label, lv_color_hex(0xFFE3E3), 0);
+    lv_obj_set_style_text_font(reset_label, &lv_font_montserrat_20, 0);
+    lv_obj_center(reset_label);
+    lv_obj_add_event_cb(reset_button, [](lv_event_t* e) {
+      show_device_action_confirmation(lv_obj_get_parent(lv_event_get_target_obj(e)), true);
+    }, LV_EVENT_CLICKED, this);
     button("Back", 375, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
