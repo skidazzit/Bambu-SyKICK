@@ -22,9 +22,9 @@ void V13MenuPreferences::clamp() {
   face_mode = static_cast<V13FaceMode>(
       std::min<uint8_t>(static_cast<uint8_t>(face_mode), 2));
   main_face = static_cast<V13Face>(
-      std::min<uint8_t>(static_cast<uint8_t>(main_face), 5));
+      std::min<uint8_t>(static_cast<uint8_t>(main_face), 6));
   idle_face = static_cast<V13IdleFace>(
-      std::min<uint8_t>(static_cast<uint8_t>(idle_face), 6));
+      std::min<uint8_t>(static_cast<uint8_t>(idle_face), 8));
   idle_delay_choice = std::min<uint8_t>(idle_delay_choice, 6);
   face_color = static_cast<V13FaceColor>(
       std::min<uint8_t>(static_cast<uint8_t>(face_color), 8));

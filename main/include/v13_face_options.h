@@ -6,18 +6,22 @@
 class FaceOptions {
 public:
     static constexpr int SadSleepy = 6;
+    static constexpr int LookAround = 6;
+    static constexpr int IdleLookAround = 7;
+    static constexpr int SadSleepyLookAround = 8;
     static constexpr uint32_t IdleFlipMs = 30000;
     enum Mode { Randomize, Mood, Single };
     enum PrinterMood { Standby, Printing, Paused, Failed, Complete };
-    inline static constexpr std::array<const char*, 6> Names = {"neutral", "sad",    "happy",
-                                                                "glossy",  "sleepy", "surprised"};
+    inline static constexpr std::array<const char*, 7> Names = {"neutral", "sad", "happy",
+                                                                "glossy", "sleepy", "surprised",
+                                                                "look_around"};
     inline static constexpr std::array<int, 7> Delays = {10, 30, 60, 120, 300, 600, 0};
     int mode = Single, main = 0, idle = 4, delay = 2;
     bool IsIdle() const { return was_idle_; }
     void Clamp() {
         mode = std::clamp(mode, 0, 2);
-        main = std::clamp(main, 0, 5);
-        idle = std::clamp(idle, 0, SadSleepy);
+        main = std::clamp(main, 0, LookAround);
+        idle = std::clamp(idle, 0, SadSleepyLookAround);
         delay = std::clamp(delay, 0, 6);
     }
     void Activity(uint32_t now) {
@@ -33,11 +37,15 @@ public:
         }
         if (Delays[delay] && now - last_input_ >= uint32_t(Delays[delay]) * 1000) {
             was_idle_ = true;
-            if (idle == SadSleepy) {
+            if (idle == SadSleepy || idle == SadSleepyLookAround) {
                 const uint32_t elapsed = now - last_input_ - uint32_t(Delays[delay]) * 1000;
-                return (elapsed / IdleFlipMs) % 2 == 0 ? 1 : 4;
+                const uint32_t phase = elapsed / IdleFlipMs;
+                if (idle == SadSleepy) return phase % 2 == 0 ? 1 : 4;
+                // Keep the old two-face mode intact; the new mode adds a third face.
+                constexpr int kCycle[] = {1, 4, LookAround};
+                return kCycle[phase % 3];
             }
-            return idle;
+            return idle == IdleLookAround ? LookAround : idle;
         }
         if (was_idle_)
             Activity(now);
@@ -48,7 +56,7 @@ public:
             current_ = faces[std::clamp(int(mood), 0, 4)];
         } else if (now - last_random_ >= 30000) {
             // Pick another face without an immediate repeat.
-            current_ = (current_ + 1 + random % 5) % 6;
+            current_ = (current_ + 1 + random % 6) % 7;
             last_random_ = now;
         }
         return current_;

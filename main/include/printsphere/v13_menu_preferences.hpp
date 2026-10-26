@@ -10,10 +10,11 @@ namespace printsphere {
 // profiles so the UI port cannot overwrite existing Wi-Fi/printer settings.
 enum class V13FaceMode : uint8_t { kRandomize = 0, kMood = 1, kSingle = 2 };
 enum class V13Face : uint8_t {
-  kIdle = 0, kSad, kHappy, kGlossy, kSleepy, kSurprised
+  kIdle = 0, kSad, kHappy, kGlossy, kSleepy, kSurprised, kLookAround
 };
 enum class V13IdleFace : uint8_t {
-  kIdle = 0, kSad, kHappy, kGlossy, kSleepy, kSurprised, kSadSleepy
+  kIdle = 0, kSad, kHappy, kGlossy, kSleepy, kSurprised, kSadSleepy,
+  kLookAround, kSadSleepyLookAround
 };
 enum class V13FaceColor : uint8_t {
   kCyan = 0, kBlue, kGreen, kOrange, kPurple, kRed, kWhite, kPink, kYellow

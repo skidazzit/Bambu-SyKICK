@@ -3307,7 +3307,7 @@ esp_err_t Ui::build_dashboard() {
   face_renderer_->SetColor(kV13Colors[static_cast<uint8_t>(v13_preferences_.face_color)],
                            v13_preferences_.match_heart_color);
   constexpr const char* kV13Faces[] = {
-      "neutral", "sad", "happy", "glossy", "sleepy", "surprised"
+      "neutral", "sad", "happy", "glossy", "sleepy", "surprised", "look_around"
   };
   face_renderer_->SetEmotion(kV13Faces[static_cast<uint8_t>(v13_preferences_.main_face)]);
   v13_face_options_.Activity(lv_tick_get());
@@ -4099,7 +4099,7 @@ void Ui::refresh_v13_face() {
       0xFF4141, 0xFFFFFF, 0xFF7DBC, 0xFFDD36
   };
   constexpr const char* faces[] = {
-      "neutral", "sad", "happy", "glossy", "sleepy", "surprised"
+      "neutral", "sad", "happy", "glossy", "sleepy", "surprised", "look_around"
   };
   v13_preferences_.clamp();
   face_renderer_->SetColor(colors[static_cast<uint8_t>(v13_preferences_.face_color)],
@@ -4413,7 +4413,7 @@ void Ui::open_v13_menu(int page) {
       save_v13_menu_preferences(ui->v13_preferences_);
     });
     label("Main face", 161);
-    dropdown("Idle\nSad\nHappy\nGlossy\nSleepy\nSurprised", 187,
+    dropdown("Idle\nSad\nHappy\nGlossy\nSleepy\nSurprised\nLook Around", 187,
       static_cast<int>(v13_preferences_.main_face), [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       ui->v13_preferences_.main_face = static_cast<V13Face>(
@@ -4438,7 +4438,7 @@ void Ui::open_v13_menu(int page) {
     });
   } else if (safe_page == 5) {
     label("Idle face", 98);
-    dropdown("Idle\nSad\nHappy\nGlossy\nSleepy\nSurprised\nSad / Sleepy", 131,
+    dropdown("Idle\nSad\nHappy\nGlossy\nSleepy\nSurprised\nSad / Sleepy\nLook Around\nSad / Sleepy / Look Around", 131,
       static_cast<int>(v13_preferences_.idle_face), [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       ui->v13_preferences_.idle_face = static_cast<V13IdleFace>(

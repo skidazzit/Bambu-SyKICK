@@ -227,6 +227,42 @@ void VideoFace::Draw(lv_event_t* event) {
             p.Line(240, 271, x, y + 32, 2, colors[i]);
             p.Oval(x, y, 46, 64, colors[i]);
         }
+    } else if (emotion_ == "look_around") {
+        // Preview-approved five-second gaze: the eye facing the turn grows 35%.
+        // The base eyes retain the approved 10% face-size increase.
+        const float seconds = std::fmod(t, 5.2f);
+        auto ease = [seconds](float start, float end) {
+            const float progress = std::clamp((seconds - start) / (end - start), 0.f, 1.f);
+            return progress * progress * (3.f - 2.f * progress);
+        };
+        const float left_focus = ease(0.42f, 0.88f) * (1.f - ease(1.92f, 2.18f));
+        const float right_focus = ease(2.60f, 3.06f) * (1.f - ease(4.10f, 4.36f));
+        const float look_offset = 22.f * (right_focus - left_focus);
+        float eye_blink = 1.f;
+        for (const float blink_center : {1.92f, 4.10f}) {
+            const float distance = std::fabs(seconds - blink_center);
+            if (distance < 0.13f)
+                eye_blink = std::min(eye_blink, 0.12f + 0.88f * distance / 0.13f);
+        }
+        auto draw_eye = [&](float cx, float focus) {
+            const float growth = 1.f + 0.35f * focus;
+            const float width = 91.f * kFaceSizeScale * growth;
+            const float height = 119.f * kFaceSizeScale * growth * eye_blink;
+            const float center_x = 233.f + (cx - 233.f) * kFaceSizeScale + look_offset;
+            const float center_y = 233.f + bob * kFaceSizeScale;
+            lv_draw_rect_dsc_t d;
+            lv_draw_rect_dsc_init(&d);
+            d.bg_color = lv_color_hex(color_);
+            d.radius = static_cast<int>(std::min(width, height) / 2.f);
+            lv_area_t rect{
+                static_cast<int>(area.x1 + center_x - width / 2.f),
+                static_cast<int>(area.y1 + center_y - height / 2.f),
+                static_cast<int>(area.x1 + center_x + width / 2.f - 1.f),
+                static_cast<int>(area.y1 + center_y + height / 2.f - 1.f)};
+            lv_draw_rect(lv_event_get_layer(event), &d, &rect);
+        };
+        draw_eye(163.f, left_focus);
+        draw_eye(303.f, right_focus);
     } else {
         // Orbit's original eyes, centered in a 392 x 224 band on the 466px screen.
         // The existing LVGL display rotation applies to menus and faces together.
