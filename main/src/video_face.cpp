@@ -5,14 +5,16 @@
 
 namespace {
 constexpr float Pi = 3.14159265f;
-// The approved second preview enlarges the face by 8%, centered on the screen.
+// Enlarge all face artwork by 10% while keeping its center fixed on the round screen.
+constexpr float kFaceSizeScale = 1.10f;
+constexpr float kPainterBaseScale = 1.16f;
 struct Painter {
     lv_layer_t* layer;
     int x, y;
     lv_point_precise_t Point(float px, float py) {
         lv_point_precise_t p{};
-        p.x = static_cast<int>(x + 233 + (px - 240) * 1.16f);
-        p.y = static_cast<int>(y + 233 + (py - 265) * 1.16f);
+        p.x = static_cast<int>(x + 233 + (px - 240) * kPainterBaseScale * kFaceSizeScale);
+        p.y = static_cast<int>(y + 233 + (py - 265) * kPainterBaseScale * kFaceSizeScale);
         return p;
     }
     void Polygon(const lv_point_precise_t* points, int count, float, float, uint32_t color) {
@@ -58,7 +60,7 @@ struct Painter {
         lv_draw_line_dsc_init(&d);
         d.p1 = Point(x1, y1);
         d.p2 = Point(x2, y2);
-        d.width = width;
+        d.width = std::max(1, static_cast<int>(std::lround(width * kFaceSizeScale)));
         d.color = lv_color_hex(color);
         d.round_start = d.round_end = true;
         lv_draw_line(layer, &d);
@@ -249,10 +251,12 @@ void VideoFace::Draw(lv_event_t* event) {
             w = 108;
             h = 112;
         }
-        float gaze = 12 * std::sin(t * .65f);
+        w *= kFaceSizeScale;
+        h *= kFaceSizeScale;
+        float gaze = 12 * kFaceSizeScale * std::sin(t * .65f);
         auto ovalEye = [&](float cx) {
-            cx += gaze;
-            float cy = 233 + bob;
+            cx = 233.f + (cx - 233.f) * kFaceSizeScale + gaze;
+            float cy = 233 + bob * kFaceSizeScale;
             // Rounded rectangle preserves Orbit's broad capsules rather than ovals.
             auto roundRect = [&](float x, float y, float width, float height, uint32_t color) {
                 lv_draw_rect_dsc_t d;
