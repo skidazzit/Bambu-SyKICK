@@ -4082,10 +4082,7 @@ void Ui::open_v13_menu(int page) {
   };
   if (safe_page == 0) {
     // Sliders live in Control Center; menu options scroll below them.
-    lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_AUTO);
-    lv_obj_add_flag(v13_menu_, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_set_scroll_dir(v13_menu_, LV_DIR_VER);
-    label("Brightness", 77);
+    label("Brightness", 79);
     lv_obj_t* brightness = lv_slider_create(v13_menu_);
     lv_obj_set_size(brightness, 270, 18);
     lv_obj_align(brightness, LV_ALIGN_TOP_MID, 0, 111);
@@ -4100,7 +4097,7 @@ void Ui::open_v13_menu(int page) {
       ui->set_brightness_percent(ui->v13_preferences_.brightness);
       save_v13_menu_preferences(ui->v13_preferences_);
     }, LV_EVENT_RELEASED, this);
-    label("Volume", 151);
+    label("Volume", 148);
     lv_obj_t* volume = lv_slider_create(v13_menu_);
     lv_obj_set_size(volume, 270, 18);
     lv_obj_align(volume, LV_ALIGN_TOP_MID, 0, 185);
@@ -4120,8 +4117,8 @@ void Ui::open_v13_menu(int page) {
     lv_obj_remove_flag(v13_menu_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_OFF);
     lv_obj_t* nav_list = lv_obj_create(v13_menu_);
-    lv_obj_set_size(nav_list, 316, 204);
-    lv_obj_align(nav_list, LV_ALIGN_TOP_MID, 0, 224);
+    lv_obj_set_size(nav_list, 312, 136);
+    lv_obj_align(nav_list, LV_ALIGN_TOP_MID, 0, 220);
     lv_obj_set_style_bg_opa(nav_list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(nav_list, 0, 0);
     lv_obj_set_style_pad_all(nav_list, 0, 0);
@@ -4130,14 +4127,14 @@ void Ui::open_v13_menu(int page) {
     lv_obj_add_flag(nav_list, LV_OBJ_FLAG_SCROLLABLE);
     auto nav_card = [&](const char* caption, int position, lv_event_cb_t callback) {
       lv_obj_t* card = lv_button_create(nav_list);
-      lv_obj_set_size(card, 288, 68);
-      lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 4 + position * 78);
+      lv_obj_set_size(card, 282, 66);
+      lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 4 + position * 76);
       lv_obj_set_style_radius(card, 17, 0);
-      lv_obj_set_style_bg_color(card, lv_color_hex(0x10424D), 0);
+      lv_obj_set_style_bg_color(card, lv_color_hex(position == 0 ? 0x176270 : 0x10424D), 0);
       lv_obj_set_style_bg_color(card, lv_color_hex(0x176270), LV_STATE_PRESSED);
-      lv_obj_set_style_border_width(card, 1, 0);
+      lv_obj_set_style_border_width(card, position == 0 ? 2 : 1, 0);
       lv_obj_set_style_border_width(card, 2, LV_STATE_PRESSED);
-      lv_obj_set_style_border_color(card, lv_color_hex(0x22535A), 0);
+      lv_obj_set_style_border_color(card, lv_color_hex(position == 0 ? 0x29DBE9 : 0x22535A), 0);
       lv_obj_set_style_border_color(card, lv_color_hex(0x29DBE9), LV_STATE_PRESSED);
       lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
       lv_obj_t* item_name = lv_label_create(card);
@@ -4190,6 +4187,21 @@ void Ui::open_v13_menu(int page) {
     nav_card("About", 7, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
     });
+    // Fixed round-safe exit: stays visible while menu cards scroll.
+    lv_obj_t* menu_back = lv_button_create(v13_menu_);
+    lv_obj_set_size(menu_back, 185, 44);
+    lv_obj_align(menu_back, LV_ALIGN_TOP_MID, 0, 372);
+    lv_obj_set_style_radius(menu_back, 20, 0);
+    lv_obj_set_style_bg_color(menu_back, lv_color_hex(0x10424D), 0);
+    lv_obj_set_style_border_width(menu_back, 1, 0);
+    lv_obj_set_style_border_color(menu_back, lv_color_hex(0x29DBE9), 0);
+    lv_obj_t* menu_back_label = lv_label_create(menu_back);
+    lv_label_set_text(menu_back_label, LV_SYMBOL_LEFT "  Back");
+    lv_obj_set_style_text_font(menu_back_label, &lv_font_montserrat_20, 0);
+    lv_obj_center(menu_back_label);
+    lv_obj_add_event_cb(menu_back, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->close_v13_menu();
+    }, LV_EVENT_CLICKED, this);
   } else if (safe_page == 8) {
     // Focused sort: a round-screen-safe scrolling list with 52px arrow targets.
     lv_obj_remove_flag(v13_menu_, LV_OBJ_FLAG_SCROLLABLE);
