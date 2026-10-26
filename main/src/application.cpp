@@ -91,13 +91,15 @@ bool hybrid_local_status_supported(const PrinterSnapshot& local_snapshot,
 
 bool route_allows_local_jpeg_camera(SourceMode source_mode,
                                     const PrinterSnapshot& local_snapshot,
-                                    const BambuCloudSnapshot& cloud_snapshot) {
+                                    const BambuCloudSnapshot& cloud_snapshot,
+                                    bool snapshot_bridge_configured) {
   if (source_mode == SourceMode::kCloudOnly) {
     return false;
   }
 
+  if (snapshot_bridge_configured) return true;
   const PrinterModel model = preferred_model_for_routing(local_snapshot, cloud_snapshot);
-  if (printer_model_has_jpeg_camera(model)) {
+  if (printer_model_has_jpeg_camera(model) || printer_model_has_rtsp_camera(model)) {
     return true;
   }
   if (model != PrinterModel::kUnknown) {
@@ -337,6 +339,7 @@ void Application::run() {
   printer_client_.configure(printer_connection);
   ESP_ERROR_CHECK(printer_client_.start());
   camera_client_.configure(printer_connection);
+  camera_client_.set_snapshot_url(config_store_.load_camera_snapshot_url());
   ESP_ERROR_CHECK(camera_client_.start());
 
   ESP_LOGI(kTag, "Bootstrap complete");
@@ -414,8 +417,10 @@ void Application::run() {
         hybrid_local_status_supported(local_snapshot, cloud_snapshot);
     const PrinterModel routing_model = preferred_model_for_routing(local_snapshot, cloud_snapshot);
     const bool routing_model_has_jpeg_camera = printer_model_has_jpeg_camera(routing_model);
-    const bool camera_model_has_jpeg =
-        route_allows_local_jpeg_camera(source_mode_, local_snapshot, cloud_snapshot);
+    const bool snapshot_bridge_configured = camera_client_.has_snapshot_url();
+    const bool camera_route_available =
+        route_allows_local_jpeg_camera(source_mode_, local_snapshot, cloud_snapshot,
+                                      snapshot_bridge_configured);
     const bool hybrid_camera_cooldown_active =
         source_mode_ == SourceMode::kHybrid &&
         tick_deadline_active(hybrid_camera_cooldown_deadline_, now_tick);
@@ -466,7 +471,11 @@ void Application::run() {
         local_network_ready &&
         (source_mode_ == SourceMode::kLocalOnly || hybrid_local_camera_demand);
     printer_client_.set_network_ready(local_network_ready);
-    camera_client_.set_network_ready(local_camera_network_ready);
+    // A JPEG bridge only needs Wi-Fi; native Bambu JPEG also needs local MQTT.
+    camera_client_.set_network_ready(snapshot_bridge_configured
+        ? wifi_connected
+        : (local_camera_network_ready ||
+           (wifi_connected && printer_model_has_rtsp_camera(routing_model))));
 
     local_snapshot.wifi_connected = wifi_connected;
     local_snapshot.wifi_ip = wifi_ip;
@@ -484,11 +493,15 @@ void Application::run() {
         local_snapshot.non_error_stop && tick_deadline_active(stop_banner_until_tick_, now_tick);
     resolve_ui_state(local_snapshot);
 
+    const bool native_camera_ready =
+        local_printer_enabled_ && local_camera_network_ready &&
+        routing_model_has_jpeg_camera && local_snapshot.local_connected &&
+        !local_mqtt_handoff_active;
     const bool camera_enabled =
-        source_mode_ != SourceMode::kCloudOnly && local_printer_enabled_ &&
-        local_camera_network_ready &&
-        camera_model_has_jpeg && local_snapshot.local_connected && !local_mqtt_handoff_active &&
-        camera_page_active &&
+        source_mode_ != SourceMode::kCloudOnly && wifi_connected &&
+        camera_route_available && camera_page_active &&
+        (snapshot_bridge_configured || native_camera_ready ||
+         printer_model_has_rtsp_camera(routing_model)) &&
         ui_.screen_power_mode() != ScreenPowerMode::kOff;
     camera_client_.set_enabled(camera_enabled);
     if (ui_.consume_camera_refresh_request()) {
@@ -547,7 +560,8 @@ void Application::run() {
       merged.preview_page_available = source_mode_ != SourceMode::kLocalOnly;
       merged.camera_page_available =
           route_allows_local_jpeg_camera(source_mode_, current_local_snapshot,
-                                         current_cloud_snapshot);
+                                         current_cloud_snapshot,
+                                         snapshot_bridge_configured);
       return merged;
     };
     auto apply_chamber_light_override = [&](PrinterSnapshot* target_snapshot) {
@@ -658,8 +672,16 @@ void Application::run() {
       snapshot.pmu_temp_c = power.temperature_c;
     }
 
+    const bool print_camera_active =
+        snapshot.lifecycle == PrintLifecycleState::kPrinting ||
+        (snapshot.print_active &&
+         snapshot.lifecycle != PrintLifecycleState::kFinished &&
+         snapshot.lifecycle != PrintLifecycleState::kError);
+    camera_client_.set_print_in_progress(print_camera_active);
+
     const P1sCameraSnapshot camera_snapshot = camera_client_.snapshot();
-    if (source_mode_ == SourceMode::kCloudOnly || !local_printer_enabled_ ||
+    if (source_mode_ == SourceMode::kCloudOnly ||
+        (!local_printer_enabled_ && !snapshot_bridge_configured) ||
         !snapshot.camera_page_available) {
       snapshot.camera_connected = false;
       if (source_mode_ == SourceMode::kCloudOnly) {

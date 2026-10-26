@@ -31,6 +31,10 @@ class P1sCameraClient {
   P1sCameraClient() = default;
 
   void configure(PrinterConnection connection);
+  // Optional LAN JPEG bridge URL (for P2S and other RTSP-only cameras).
+  void set_snapshot_url(std::string url);
+  bool has_snapshot_url() const;
+  void set_print_in_progress(bool active) { print_in_progress_.store(active); }
   bool is_configured() const;
   void set_network_ready(bool ready) { network_ready_.store(ready); }
   void set_enabled(bool enabled) { enabled_.store(enabled); }
@@ -44,9 +48,11 @@ class P1sCameraClient {
 
   void task_loop();
   PrinterConnection desired_connection() const;
+  std::string desired_snapshot_url() const;
   bool ensure_connected(const PrinterConnection& connection);
   void disconnect();
   bool fetch_frame_once(const PrinterConnection& connection);
+  bool fetch_http_snapshot_once(const std::string& url);
   void set_snapshot(P1sCameraSnapshot snapshot);
   void set_status_snapshot(bool configured, bool enabled, bool connected, const char* detail);
   void set_frame_snapshot(bool configured, bool enabled, bool connected, const char* detail,
@@ -66,6 +72,7 @@ class P1sCameraClient {
   P1sCameraSnapshot snapshot_{};
   mutable std::mutex config_mutex_{};
   PrinterConnection desired_connection_{};
+  std::string snapshot_url_{};
   mutable std::mutex observed_mutex_{};
   PrinterModel observed_model_ = PrinterModel::kUnknown;
   std::string observed_rtsp_url_{};
@@ -74,6 +81,7 @@ class P1sCameraClient {
   esp_tls_t* tls_ = nullptr;
   std::atomic<bool> network_ready_{false};
   std::atomic<bool> enabled_{false};
+  std::atomic<bool> print_in_progress_{false};
   std::atomic<bool> refresh_requested_{false};
   std::atomic<bool> reconfigure_requested_{false};
   bool idle_notified_ = false;

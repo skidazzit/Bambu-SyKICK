@@ -265,6 +265,23 @@ bool is_valid_printer_host(const std::string& host) {
   return is_valid_ipv4(host) || is_valid_hostname(host);
 }
 
+// JPEG frames come from a user-supplied HTTP bridge on the home network.
+bool valid_camera_snapshot_url(const std::string& url) {
+  if (url.empty()) return true;
+  if (url.size() > 240U || url.rfind("http://", 0) != 0) return false;
+  const size_t host_start = sizeof("http://") - 1U;
+  const size_t path_start = url.find('/', host_start);
+  if (path_start == std::string::npos || path_start == host_start ||
+      path_start + 1U >= url.size()) return false;
+  const std::string host_port = url.substr(host_start, path_start - host_start);
+  if (host_port.find('@') != std::string::npos || host_port.front() == ':') return false;
+  for (unsigned char ch : url) {
+    if (ch <= 0x20U || ch >= 0x7FU || ch == '"' || ch == '<' ||
+        ch == '>' || ch == '#') return false;
+  }
+  return true;
+}
+
 uint64_t now_ms() {
   return static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
 }
@@ -1290,6 +1307,7 @@ esp_err_t SetupPortal::handle_root(httpd_req_t* request) {
   const WifiCredentials wifi = portal->config_store_.load_wifi_credentials();
   const BambuCloudCredentials cloud = portal->config_store_.load_cloud_credentials();
   const SourceMode source_mode = portal->config_store_.load_source_mode();
+  const std::string camera_snapshot_url = portal->config_store_.load_camera_snapshot_url();
   const DisplayRotation display_rotation = portal->config_store_.load_display_rotation();
   const bool portal_lock_enabled = portal->config_store_.load_portal_lock_enabled();
   const bool filament_wake = portal->config_store_.load_filament_wake_enabled();
@@ -1414,7 +1432,7 @@ esp_err_t SetupPortal::handle_root(httpd_req_t* request) {
   const char* ams_display_badge_class = filament_wake || !filament_anim ? "info" : "idle";
   const std::string arc_badge_value = arc_colors_custom ? "Custom" : "Default";
   const char* arc_badge_class = arc_colors_custom ? "info" : "idle";
-  const int device_settings_count = show_connection_steps ? 5 : 4;
+  const int device_settings_count = show_connection_steps ? 6 : 5;
   const std::string device_settings_badge_value =
       std::to_string(device_settings_count) + (device_settings_count == 1 ? " Panel" : " Panels");
   const bool device_settings_section_open = true;
@@ -1423,6 +1441,7 @@ esp_err_t SetupPortal::handle_root(httpd_req_t* request) {
   const bool energy_section_open = false;
   const bool ams_display_section_open = false;
   const bool connection_mode_section_open = false;
+  const bool camera_snapshot_section_open = false;
   const bool portal_access_section_open = !portal_lock_enabled && !setup_ap_active;
   const bool cloud_section_configured =
       cloud_snapshot.configured || cloud_portal.ready || cloud_snapshot.verification_required ||
@@ -2133,6 +2152,18 @@ esp_err_t SetupPortal::handle_root(httpd_req_t* request) {
     }
 
     begin_settings_panel(
+        "Camera Snapshots",
+        "Show a fresh JPEG every 3 seconds while printing.",
+        camera_snapshot_url.empty() ? "Not set" : "Ready", "info",
+        camera_snapshot_section_open);
+    html += "<div class=\"field\"><label for=\"camera_snapshot_url\">JPEG Snapshot URL</label>";
+    html += "<input id=\"camera_snapshot_url\" type=\"url\" maxlength=\"240\" placeholder=\"http://go2rtc-host:1984/api/frame.jpeg?src=bambu_camera&amp;width=400&amp;height=224\" value=\"";
+    html += json_escape(camera_snapshot_url);
+    html += "\" /></div>";
+    html += "<div class=\"micro\">For a P2S, use a go2rtc bridge on your LAN to turn its RTSP video into JPEG images. Leave blank for native JPEG models. Uses Hybrid or Local mode and the last printer page.</div>";
+    end_settings_panel();
+
+    begin_settings_panel(
         "Portal Access",
         "PIN protection for the web portal on your home network after provisioning.",
         portal_lock_badge_value, portal_lock_badge_class, portal_access_section_open);
@@ -2470,6 +2501,8 @@ esp_err_t SetupPortal::handle_root(httpd_req_t* request) {
   html += json_escape(to_string(cloud.region));
   html += "\",source_mode:\"";
   html += to_string(source_mode);
+  html += "\",camera_snapshot_url:\"";
+  html += json_escape(camera_snapshot_url);
   html += "\",display_rotation:\"";
   html += to_string(display_rotation);
   html += "\",portal_lock_enabled:";
@@ -2745,6 +2778,7 @@ esp_err_t SetupPortal::handle_root(httpd_req_t* request) {
           "filament_wake:(document.getElementById('filament_wake')?valueOf('filament_wake')==='true':savedConfig.filament_wake===true),"
           "filament_anim:(document.getElementById('filament_anim')?valueOf('filament_anim')==='true':savedConfig.filament_anim!==false),"
           "source_mode:(document.getElementById('source_mode')?valueOf('source_mode'):savedConfig.source_mode)||'hybrid',"
+          "camera_snapshot_url:(document.getElementById('camera_snapshot_url')?trimmedValue('camera_snapshot_url'):savedConfig.camera_snapshot_url||''),"
           "printer_host:(document.getElementById('printer_host')?trimmedValue('printer_host'):savedConfig.printer_host),"
           "printer_serial:(document.getElementById('printer_serial')?trimmedValue('printer_serial'):savedConfig.printer_serial),"
           "printer_access_code:(document.getElementById('printer_access_code')?trimmedValue('printer_access_code'):'' ),"
@@ -3383,6 +3417,7 @@ esp_err_t SetupPortal::handle_config_get(httpd_req_t* request) {
   const WifiCredentials wifi = portal->config_store_.load_wifi_credentials();
   const BambuCloudCredentials cloud = portal->config_store_.load_cloud_credentials();
   const SourceMode source_mode = portal->config_store_.load_source_mode();
+  const std::string camera_snapshot_url = portal->config_store_.load_camera_snapshot_url();
   const DisplayRotation display_rotation = portal->config_store_.load_display_rotation();
   const bool portal_lock_enabled = portal->config_store_.load_portal_lock_enabled();
   const PrinterConnection printer = portal->config_store_.load_active_printer_profile().to_connection();
@@ -3409,6 +3444,7 @@ esp_err_t SetupPortal::handle_config_get(httpd_req_t* request) {
   body += "\"cloud_region\":\"" + json_escape(to_string(cloud.region)) + "\",";
   body += "\"printer_host\":\"" + json_escape(printer.host) + "\",";
   body += "\"printer_serial\":\"" + json_escape(effective_printer_serial) + "\",";
+  body += "\"camera_snapshot_url\":\"" + json_escape(portal->config_store_.load_camera_snapshot_url()) + "\",";
   body += "\"source_mode\":\"";
   body += to_string(source_mode);
   body += "\",";
@@ -3496,6 +3532,7 @@ esp_err_t SetupPortal::handle_config_post(httpd_req_t* request) {
       .region = parse_cloud_region(trim_copy(read_string_field(root, "cloud_region"))),
   }, stored_cloud);
   const SourceMode source_mode = parse_source_mode_field(root);
+  const std::string camera_snapshot_url = trim_copy(read_string_field(root, "camera_snapshot_url"));
   const DisplayRotation display_rotation = parse_display_rotation_field(root);
   const bool portal_lock_enabled =
       read_bool_field(root, "portal_lock_enabled", stored_portal_lock_enabled);
@@ -3547,6 +3584,9 @@ esp_err_t SetupPortal::handle_config_post(httpd_req_t* request) {
   if (!colors_valid) {
     return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "invalid arc color value");
   }
+  if (!valid_camera_snapshot_url(camera_snapshot_url)) {
+    return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "invalid JPEG snapshot URL");
+  }
 
   const bool local_requires_complete_fields =
       !printer.host.empty() || !printer.access_code.empty();
@@ -3583,6 +3623,8 @@ esp_err_t SetupPortal::handle_config_post(httpd_req_t* request) {
                       "save cloud failed");
   ESP_RETURN_ON_ERROR(portal->config_store_.save_source_mode(source_mode), kTag,
                       "save source mode failed");
+  ESP_RETURN_ON_ERROR(portal->config_store_.save_camera_snapshot_url(camera_snapshot_url), kTag,
+                      "save JPEG snapshot URL failed");
   ESP_RETURN_ON_ERROR(portal->config_store_.save_display_rotation(display_rotation), kTag,
                       "save display rotation failed");
   ESP_RETURN_ON_ERROR(portal->config_store_.save_portal_lock_enabled(portal_lock_enabled), kTag,

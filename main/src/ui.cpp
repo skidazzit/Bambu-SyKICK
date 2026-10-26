@@ -1139,7 +1139,7 @@ std::string camera_subnote_text(const PrinterSnapshot& snapshot) {
   if (!snapshot.job_name.empty()) {
     return snapshot.job_name;
   }
-  return "Auto-refresh every 2s";
+  return "Photo every 3s during print";
 }
 
 const char* mdi_battery_symbol(const PrinterSnapshot& snapshot) {
@@ -3278,7 +3278,7 @@ esp_err_t Ui::build_dashboard() {
   enable_touch_bubble(page3_note_);
 
   page3_subnote_ = lv_label_create(page3_);
-  set_label_text_if_changed(page3_subnote_, "Auto-refresh every 2s");
+  set_label_text_if_changed(page3_subnote_, "Photo every 3s during print");
   lv_obj_set_width(page3_subnote_, 320);
   lv_label_set_long_mode(page3_subnote_, LV_LABEL_LONG_WRAP);
   lv_obj_set_style_text_align(page3_subnote_, LV_TEXT_ALIGN_CENTER, 0);
