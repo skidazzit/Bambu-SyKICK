@@ -3,7 +3,7 @@ name: Bambu SyKICK beta firmware
 on:
   workflow_dispatch:
   push:
-    branches: [main, beta/v13-menus]
+    branches: [beta/v13-menus]
     paths:
       - ".github/workflows/beta-firmware.yml"
       - "CMakeLists.txt"

@@ -1,0 +1,68 @@
+name: Bambu SyKICK stable v1.7.0 firmware
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/stable-firmware.yml"
+
+concurrency:
+  group: bambu-stable-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-amoled-stable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ESP-IDF 6.0.2
+        uses: espressif/install-esp-idf-action@v1
+        with:
+          version: v6.0.2
+      - name: Build stable firmware for 1.75-inch AMOLED
+        run: idf.py -DPRINTSPHERE_HW_VARIANT=amoled_1_75 -DBAMBU_SYKICK_BETA=OFF build
+      - name: Package stable full and OTA images
+        run: |
+          python3 tools/package_initial_flash.py \
+            --build-dir build \
+            --release-root release \
+            --version v1.7.0
+      - name: Verify stable image version and checksums
+        run: |
+          test -s release/initial/printsphere_full.bin
+          test -s release/ota/printsphere_ota.bin
+          test -s release/initial/archive/printsphere_full-v1.7.0.bin
+          test -s release/ota/archive/printsphere_ota-v1.7.0.bin
+          python3 -m esptool image-info release/ota/printsphere_ota.bin | tee image-info.txt
+          grep -F "v1.7.0" image-info.txt
+          python3 -c 'from pathlib import Path; assert Path("release/initial/printsphere_full.bin").read_bytes()[0] == 0xE9, "Invalid bootloader header"'
+          sha256sum release/initial/printsphere_full.bin release/ota/printsphere_ota.bin > SHA256SUMS
+      - name: Upload verified stable firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bambu-SyKICK-stable-v1.7.0-AMOLED
+          path: |
+            release/initial/printsphere_full.bin
+            release/ota/printsphere_ota.bin
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90
+      - name: Publish stable binaries to the web installer
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add release/initial/printsphere_full.bin \
+                  release/ota/printsphere_ota.bin \
+                  release/initial/archive/printsphere_full-v1.7.0.bin \
+                  release/ota/archive/printsphere_ota-v1.7.0.bin
+          if git diff --cached --quiet; then
+            echo "Stable firmware files are already published."
+          else
+            git commit -m "release: publish stable v1.7.0 AMOLED firmware [skip ci]"
+            git push origin HEAD:main
+          fi
