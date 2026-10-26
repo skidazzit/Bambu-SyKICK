@@ -671,13 +671,6 @@ void Application::run() {
       snapshot.pmu_temp_c = power.temperature_c;
     }
 
-    const bool print_camera_active =
-        snapshot.lifecycle == PrintLifecycleState::kPrinting ||
-        (snapshot.print_active &&
-         snapshot.lifecycle != PrintLifecycleState::kFinished &&
-         snapshot.lifecycle != PrintLifecycleState::kError);
-    camera_client_.set_print_in_progress(print_camera_active);
-
     const P1sCameraSnapshot camera_snapshot = camera_client_.snapshot();
     if (source_mode_ == SourceMode::kCloudOnly ||
         (!local_printer_enabled_ && !snapshot_bridge_configured) ||

@@ -34,7 +34,6 @@ class P1sCameraClient {
   // Optional LAN JPEG bridge URL (for P2S and other RTSP-only cameras).
   void set_snapshot_url(std::string url);
   bool has_snapshot_url() const;
-  void set_print_in_progress(bool active) { print_in_progress_.store(active); }
   bool is_configured() const;
   void set_network_ready(bool ready) { network_ready_.store(ready); }
   void set_enabled(bool enabled) { enabled_.store(enabled); }
@@ -81,7 +80,6 @@ class P1sCameraClient {
   esp_tls_t* tls_ = nullptr;
   std::atomic<bool> network_ready_{false};
   std::atomic<bool> enabled_{false};
-  std::atomic<bool> print_in_progress_{false};
   std::atomic<bool> refresh_requested_{false};
   std::atomic<bool> reconfigure_requested_{false};
   bool idle_notified_ = false;

@@ -25,8 +25,8 @@ constexpr uint16_t kCameraPort = 6000;
 constexpr size_t kFrameHeaderBytes = 16;
 constexpr size_t kMaxFrameBytes = 512U * 1024U;
 constexpr size_t kImagePersistentReserveBytes = 20U * 1024U;
-// Refresh a single JPEG still every 3 seconds while printing.
-constexpr int64_t kAutoRefreshIntervalUs = 3000000;
+// Poll at most once per second while the camera page is open.
+constexpr int64_t kAutoRefreshIntervalUs = 1000000;
 constexpr int64_t kTlsReadDeadlineUs = 4000000;
 constexpr int64_t kTlsWriteDeadlineUs = 2000000;
 constexpr uint16_t kTargetWidth = 400;
@@ -684,20 +684,27 @@ void P1sCameraClient::task_loop() {
     }
 
     const int64_t now_us = esp_timer_get_time();
-    const bool auto_refresh = print_in_progress_.load();
-    const bool due = auto_refresh &&
-        (last_fetch_us == 0 || (now_us - last_fetch_us) >= kAutoRefreshIntervalUs);
+    // Only reach this point when the camera page is enabled. Refresh whether
+    // the printer is printing or idle; a tap can still force an early frame.
+    const bool due = last_fetch_us == 0 ||
+                     (now_us - last_fetch_us) >= kAutoRefreshIntervalUs;
     if (!refresh_requested_.exchange(false) && !due) {
       vTaskDelay(pdMS_TO_TICKS(100));
       continue;
     }
 
-    set_status_snapshot(true, true, false, "Loading camera image");
+    // Preserve the last good image during routine polling to avoid flashing a
+    // "Loading" state once per second.
+    if (!has_cached_frame()) {
+      set_status_snapshot(true, true, false, "Loading camera image");
+    }
 
+    // Count from the start of the request, not the end. Network and decode
+    // work can take longer than one second; requests never overlap.
+    last_fetch_us = now_us;
     const bool ok = jpeg_url.empty()
         ? fetch_frame_once(connection)
         : fetch_http_snapshot_once(jpeg_url);
-    last_fetch_us = esp_timer_get_time();
     if (!ok) {
       if (!enabled_.load()) {
         consecutive_connect_failures_ = 0;
