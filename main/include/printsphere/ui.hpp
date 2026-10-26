@@ -161,6 +161,7 @@ class Ui {
   static void screen_event_cb(lv_event_t* event);
   static void face_event_cb(lv_event_t* event);
   static void logo_event_cb(lv_event_t* event);
+  static void camera_light_button_event_cb(lv_event_t* event);
   static void pause_button_event_cb(lv_event_t* event);
   static void stop_button_event_cb(lv_event_t* event);
   void handle_pause_button_event(lv_event_t* event);
@@ -289,7 +290,9 @@ class Ui {
   lv_obj_t* page2_stop_button_label_ = nullptr;
   lv_obj_t* page3_image_ = nullptr;
   lv_obj_t* page3_note_ = nullptr;
-  lv_obj_t* page3_subnote_ = nullptr;
+  lv_obj_t* page3_light_button_ = nullptr;
+  lv_obj_t* page3_light_button_label_ = nullptr;
+  int page3_last_light_state_ = -2;
   lv_obj_t* portal_hint_label_ = nullptr;
   lv_obj_t* portal_overlay_card_ = nullptr;
   lv_obj_t* portal_overlay_title_ = nullptr;

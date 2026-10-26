@@ -23,7 +23,7 @@ namespace {
 constexpr char kTag[] = "printsphere.camera";
 constexpr uint16_t kCameraPort = 6000;
 constexpr size_t kFrameHeaderBytes = 16;
-constexpr size_t kMaxFrameBytes = 256U * 1024U;
+constexpr size_t kMaxFrameBytes = 512U * 1024U;
 constexpr size_t kImagePersistentReserveBytes = 20U * 1024U;
 // Refresh a single JPEG still every 3 seconds while printing.
 constexpr int64_t kAutoRefreshIntervalUs = 3000000;
@@ -371,10 +371,58 @@ bool P1sCameraClient::decode_frame_rgb565(const std::shared_ptr<std::vector<uint
     return false;
   }
 
+  // Probe the source dimensions with resizing OFF. Espressif's JPEG decoder
+  // rejects a requested width/height larger than the input. This also avoids
+  // allocating an entire full-resolution output for large camera frames.
+  jpeg_dec_config_t probe_config = DEFAULT_JPEG_DEC_CONFIG();
+  probe_config.output_type = JPEG_PIXEL_FORMAT_RGB565_LE;
+  jpeg_dec_handle_t probe = nullptr;
+  if (jpeg_dec_open(&probe_config, &probe) != JPEG_ERR_OK || probe == nullptr) {
+    ESP_LOGW(kTag, "JPEG probe open failed");
+    return false;
+  }
+  jpeg_dec_io_t probe_io = {};
+  probe_io.inbuf = const_cast<uint8_t*>(jpeg_blob->data());
+  probe_io.inbuf_len = static_cast<int>(jpeg_blob->size());
+  jpeg_dec_header_info_t source = {};
+  const jpeg_error_t probe_error = jpeg_dec_parse_header(probe, &probe_io, &source);
+  jpeg_dec_close(probe);
+  if (probe_error != JPEG_ERR_OK || source.width == 0U || source.height == 0U) {
+    ESP_LOGW(kTag, "JPEG source header invalid");
+    return false;
+  }
+
   jpeg_dec_config_t config = DEFAULT_JPEG_DEC_CONFIG();
   config.output_type = JPEG_PIXEL_FORMAT_RGB565_LE;
-  config.scale.width = kTargetWidth;
-  config.scale.height = kTargetHeight;
+  uint16_t width = source.width;
+  uint16_t height = source.height;
+  if (source.width > kTargetWidth || source.height > kTargetHeight) {
+    // Fit inside the camera viewport without stretching. JPEG scale dimensions
+    // must be multiples of 8 and scaling is limited to a factor of 1/8.
+    uint32_t fit_width = source.width;
+    uint32_t fit_height = source.height;
+    if (static_cast<uint32_t>(source.width) * kTargetHeight >
+        static_cast<uint32_t>(source.height) * kTargetWidth) {
+      fit_width = kTargetWidth;
+      fit_height = static_cast<uint32_t>(source.height) * fit_width / source.width;
+    } else {
+      fit_height = kTargetHeight;
+      fit_width = static_cast<uint32_t>(source.width) * fit_height / source.height;
+    }
+    fit_width = (fit_width / 8U) * 8U;
+    fit_height = (fit_height / 8U) * 8U;
+    if (fit_width == 0U || fit_height == 0U ||
+        static_cast<uint32_t>(source.width) > fit_width * 8U ||
+        static_cast<uint32_t>(source.height) > fit_height * 8U) {
+      ESP_LOGW(kTag, "JPEG %ux%u exceeds scaler range; resize with go2rtc",
+               static_cast<unsigned>(source.width), static_cast<unsigned>(source.height));
+      return false;
+    }
+    width = static_cast<uint16_t>(fit_width);
+    height = static_cast<uint16_t>(fit_height);
+    config.scale.width = width;
+    config.scale.height = height;
+  }
 
   jpeg_dec_handle_t decoder = nullptr;
   jpeg_dec_io_t io = {};
@@ -392,7 +440,9 @@ bool P1sCameraClient::decode_frame_rgb565(const std::shared_ptr<std::vector<uint
   void* aligned_out = nullptr;
   do {
     if (jpeg_dec_parse_header(decoder, &io, &header) != JPEG_ERR_OK) {
-      ESP_LOGW(kTag, "JPEG header parse failed");
+      ESP_LOGW(kTag, "JPEG header parse failed (%ux%u -> %ux%u)",
+               static_cast<unsigned>(source.width), static_cast<unsigned>(source.height),
+               static_cast<unsigned>(width), static_cast<unsigned>(height));
       break;
     }
 
@@ -413,7 +463,9 @@ bool P1sCameraClient::decode_frame_rgb565(const std::shared_ptr<std::vector<uint
 
     io.outbuf = static_cast<uint8_t*>(aligned_out);
     if (jpeg_dec_process(decoder, &io) != JPEG_ERR_OK) {
-      ESP_LOGW(kTag, "JPEG decode failed");
+      ESP_LOGW(kTag, "JPEG decode failed (%ux%u -> %ux%u)",
+               static_cast<unsigned>(source.width), static_cast<unsigned>(source.height),
+               static_cast<unsigned>(width), static_cast<unsigned>(height));
       break;
     }
 
@@ -423,8 +475,11 @@ bool P1sCameraClient::decode_frame_rgb565(const std::shared_ptr<std::vector<uint
     std::memcpy(decoded->data(), aligned_out, static_cast<size_t>(out_len));
     log_blob_diag("camera rgb565 decoded buffer", decoded);
     *out_blob = std::move(decoded);
-    *out_width = config.scale.width > 0U ? config.scale.width : header.width;
-    *out_height = config.scale.height > 0U ? config.scale.height : header.height;
+    *out_width = width;
+    *out_height = height;
+    ESP_LOGI(kTag, "JPEG scaled %ux%u -> %ux%u",
+             static_cast<unsigned>(source.width), static_cast<unsigned>(source.height),
+             static_cast<unsigned>(width), static_cast<unsigned>(height));
     ok = true;
   } while (false);
 

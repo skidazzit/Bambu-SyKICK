@@ -16,7 +16,10 @@ The URL stays in device settings (NVS) and is not stored in GitHub. Keep go2rtc 
 
 ## Notes
 
-- Frames are decoded to 400×224 RGB565 for the AMOLED display.
+- Frames are decoded to RGB565 and fit within 400×224 without stretching or upscaling. Smaller frames remain centered.
+- Verified sizing targets: 240×240 → 224×224, 320×240 → 296×224, 400×224 unchanged, 1920×1080 → 392×224.
+- The JPEG scaler supports output sizes divisible by 8, with no more than 8× downscaling. Use go2rtc to resize very large source images, such as 4K.
+- The bottom camera-page control replaces layer progress. Tap **LIGHT ON / LIGHT OFF** to switch the printer chamber light using the current Bambu connection; unsupported models show LIGHT N/A.
 - Frames are requested only while that page is open. Fetches repeat during active prints; tap to request one when idle.
 - A failed fetch keeps the most recent frame and reports a camera error.
 - The native JPEG camera path remains for older printer models without a custom URL.
@@ -26,6 +29,8 @@ The URL stays in device settings (NVS) and is not stored in GitHub. Keep go2rtc 
 
 - [ ] JPEG URL saves and survives reboot.
 - [ ] Last printer page shows a photo during a print.
+- [ ] Try 240×240, 320×240, 400×224, and 1920×1080 JPEGs.
+- [ ] Light button toggles ON/OFF and reports the current state.
 - [ ] Image changes roughly every 3 seconds.
 - [ ] Leaving the camera page stops requests.
 - [ ] Idle state stops automatic requests; tap still works.

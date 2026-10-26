@@ -70,8 +70,6 @@ constexpr int kPage2SubnoteWithImageY = 188;
 constexpr int kPage3CameraWidth = 400;
 constexpr int kPage3CameraHeight = 224;
 constexpr int kPage3CameraYOffset = 0;
-constexpr int kPage3NoteWithImageY = 150;
-constexpr int kPage3SubnoteWithImageY = 182;
 // Status text shown above the camera JPEG when an image is loaded.
 // Image is 224 high and centered at y=0, so its top is ~y=-112; the
 // status sits above with comfortable breathing room.
@@ -1124,24 +1122,6 @@ std::string camera_note_text(const PrinterSnapshot& snapshot) {
   return "Tap for new image";
 }
 
-std::string camera_subnote_text(const PrinterSnapshot& snapshot) {
-  if (snapshot.camera_blob && !snapshot.camera_blob->empty()) {
-    // Image is loaded: show layer progress below the snapshot so the cam page
-    // carries the print-in-progress info that the dashboard usually owns.
-    if (snapshot.total_layers > 0 || snapshot.current_layer > 0) {
-      return layer_text(snapshot);
-    }
-    if (!snapshot.job_name.empty()) {
-      return snapshot.job_name;
-    }
-    return {};
-  }
-  if (!snapshot.job_name.empty()) {
-    return snapshot.job_name;
-  }
-  return "Photo every 3s during print";
-}
-
 const char* mdi_battery_symbol(const PrinterSnapshot& snapshot) {
   if (!snapshot.usb_present && snapshot.battery_percent == 0U && !snapshot.charging) {
     return kMdiBatteryAlert;
@@ -2164,7 +2144,6 @@ void Ui::apply_snapshot_locked(const PrinterSnapshot& snapshot, bool force_ring_
   const std::string preview_note = preview_note_text(snapshot);
   const std::string preview_subnote = preview_subnote_text(snapshot);
   const std::string camera_note = camera_note_text(snapshot);
-  const std::string camera_subnote = camera_subnote_text(snapshot);
   bool has_preview_image = false;
   if (snapshot.preview_blob && !snapshot.preview_blob->empty()) {
     const bool preview_blob_changed = last_preview_blob_.get() != snapshot.preview_blob.get();
@@ -2274,29 +2253,36 @@ void Ui::apply_snapshot_locked(const PrinterSnapshot& snapshot, bool force_ring_
   camera_image_visible_ = has_camera_image;
 
   if (camera_text_image_mode_ != has_camera_image) {
-    if (has_camera_image) {
-      // Status note moves above the image; layer/subnote sits below.
-      lv_obj_align(page3_note_, LV_ALIGN_CENTER, 0, kPage3StatusAboveImageY);
-      lv_obj_align(page3_subnote_, LV_ALIGN_CENTER, 0, kPage3NoteWithImageY);
-    } else {
-      lv_obj_align(page3_note_, LV_ALIGN_CENTER, 0, 0);
-      lv_obj_align(page3_subnote_, LV_ALIGN_CENTER, 0, 28);
-    }
+    lv_obj_align(page3_note_, LV_ALIGN_CENTER, 0,
+                 has_camera_image ? kPage3StatusAboveImageY : 0);
     camera_text_image_mode_ = has_camera_image;
   }
   set_hidden(page3_note_, camera_note.empty());
   if (!camera_note.empty()) {
     set_label_text_if_changed(page3_note_, camera_note);
   }
-  set_hidden(page3_subnote_, camera_subnote.empty());
-  if (!camera_subnote.empty()) {
-    // Use the same large font as the main-page layer label when showing
-    // "Layer: X / Y", fall back to the regular small font otherwise.
-    const bool subnote_is_layer =
-        has_camera_image && (snapshot.total_layers > 0 || snapshot.current_layer > 0);
-    lv_obj_set_style_text_font(page3_subnote_,
-                               subnote_is_layer ? &dosis_32 : &lv_font_montserrat_20, 0);
-    set_label_text_if_changed(page3_subnote_, camera_subnote);
+
+  // A large bottom touch target replaces the layer counter on the camera page.
+  // Reuse the existing chamber-light command path and its optimistic state.
+  const int light_state = !snapshot.chamber_light_supported ? -1
+      : !snapshot.chamber_light_state_known ? 0
+      : (snapshot.chamber_light_on ? 2 : 1);
+  if (page3_last_light_state_ != light_state) {
+    const bool light_on = light_state == 2;
+    const bool supported = light_state >= 0;
+    set_label_text_if_changed(page3_light_button_label_,
+                              !supported ? "LIGHT N/A"
+                                         : light_state == 0 ? "LIGHT"
+                                         : light_on ? "LIGHT ON" : "LIGHT OFF");
+    lv_obj_set_style_bg_color(page3_light_button_,
+                              lv_color_hex(light_on ? 0x654511 : 0x182A35), 0);
+    lv_obj_set_style_border_color(page3_light_button_,
+                                  lv_color_hex(light_on ? 0xF0AC42
+                                                        : supported ? 0x58718A : 0x34404B), 0);
+    lv_obj_set_style_text_color(page3_light_button_label_,
+                                lv_color_hex(supported ? 0xFFFFFF : 0x788999), 0);
+    set_clickable(page3_light_button_, supported);
+    page3_last_light_state_ = light_state;
   }
 
   show_logo_ = should_show_logo(snapshot);
@@ -3277,16 +3263,24 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_align(page3_note_, LV_ALIGN_CENTER, 0, 0);
   enable_touch_bubble(page3_note_);
 
-  page3_subnote_ = lv_label_create(page3_);
-  set_label_text_if_changed(page3_subnote_, "Photo every 3s during print");
-  lv_obj_set_width(page3_subnote_, 320);
-  lv_label_set_long_mode(page3_subnote_, LV_LABEL_LONG_WRAP);
-  lv_obj_set_style_text_align(page3_subnote_, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_style_text_font(page3_subnote_, info20, 0);
-  lv_obj_set_style_text_color(page3_subnote_, lv_color_hex(0x888888), 0);
-  lv_obj_align(page3_subnote_, LV_ALIGN_CENTER, 0, 28);
-  lv_obj_add_flag(page3_subnote_, LV_OBJ_FLAG_HIDDEN);
-  enable_touch_bubble(page3_subnote_);
+  page3_light_button_ = lv_button_create(page3_);
+  lv_obj_set_size(page3_light_button_, 190, 52);
+  lv_obj_align(page3_light_button_, LV_ALIGN_CENTER, 0, 155);
+  lv_obj_set_style_bg_color(page3_light_button_, lv_color_hex(0x182A35), 0);
+  lv_obj_set_style_bg_opa(page3_light_button_, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_color(page3_light_button_, lv_color_hex(0x58718A), 0);
+  lv_obj_set_style_border_width(page3_light_button_, 2, 0);
+  lv_obj_set_style_radius(page3_light_button_, 26, 0);
+  lv_obj_set_style_shadow_width(page3_light_button_, 0, 0);
+  lv_obj_set_style_pad_all(page3_light_button_, 0, 0);
+  lv_obj_clear_flag(page3_light_button_, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_event_cb(page3_light_button_, &Ui::camera_light_button_event_cb,
+                      LV_EVENT_CLICKED, this);
+  page3_light_button_label_ = lv_label_create(page3_light_button_);
+  set_label_text_if_changed(page3_light_button_label_, "LIGHT");
+  lv_obj_set_style_text_font(page3_light_button_label_, info20, 0);
+  lv_obj_set_style_text_color(page3_light_button_label_, lv_color_hex(0xFFFFFF), 0);
+  lv_obj_center(page3_light_button_label_);
 
   // Home face is a separate overlay. The printer pager remains fully intact.
   face_home_ = lv_obj_create(screen_);
@@ -4651,6 +4645,16 @@ void Ui::screen_event_cb(lv_event_t* event) {
   auto* ui = static_cast<Ui*>(lv_event_get_user_data(event));
   if (ui != nullptr) {
     ui->handle_screen_event(event);
+  }
+}
+
+void Ui::camera_light_button_event_cb(lv_event_t* event) {
+  auto* ui = static_cast<Ui*>(lv_event_get_user_data(event));
+  if (ui != nullptr && lv_event_get_code(event) == LV_EVENT_CLICKED &&
+      !ui->scrolling_ && ui->active_page_ == kPageIdxCamera &&
+      ui->last_snapshot_.chamber_light_supported) {
+    ui->note_activity(false);
+    ui->chamber_light_toggle_requested_.store(true);
   }
 }
 
