@@ -3239,7 +3239,7 @@ esp_err_t Ui::build_dashboard() {
   v13_menu_ = lv_obj_create(screen_);
   lv_obj_set_size(v13_menu_, board::kDisplayWidth, board::kDisplayHeight);
   lv_obj_center(v13_menu_);
-  lv_obj_set_style_bg_color(v13_menu_, lv_color_hex(0x081319), 0);
+  lv_obj_set_style_bg_color(v13_menu_, lv_color_hex(0x080F16), 0);
   lv_obj_set_style_bg_opa(v13_menu_, LV_OPA_COVER, 0);
   lv_obj_set_style_border_width(v13_menu_, 0, 0);
   lv_obj_set_style_pad_all(v13_menu_, 0, 0);
@@ -4047,23 +4047,28 @@ void Ui::open_v13_menu(int page) {
   lv_obj_t* title = lv_label_create(v13_menu_);
   lv_label_set_text(title, titles[safe_page]);
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
-  lv_obj_set_style_text_font(title, &dosis_32, 0);
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_32, 0);
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 28);
 
   auto button = [&](const char* caption, int y, lv_event_cb_t callback) {
     lv_obj_t* b = lv_button_create(v13_menu_);
     lv_obj_set_size(b, 284, 43);
     lv_obj_align(b, LV_ALIGN_TOP_MID, 0, y);
-    lv_obj_set_style_bg_color(b, lv_color_hex(0x146D73), 0);
+    lv_obj_set_style_radius(b, 16, 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(0x10424D), 0);
+    lv_obj_set_style_border_width(b, 1, 0);
+    lv_obj_set_style_border_color(b, lv_color_hex(0x29DBE9), 0);
     lv_obj_t* label = lv_label_create(b);
     lv_label_set_text(label, caption);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
     lv_obj_center(label);
     lv_obj_add_event_cb(b, callback, LV_EVENT_CLICKED, this);
   };
   auto label = [&](const char* caption, int y) {
     lv_obj_t* l = lv_label_create(v13_menu_);
     lv_label_set_text(l, caption);
-    lv_obj_set_style_text_color(l, lv_color_hex(0xD8E8EA), 0);
+    lv_obj_set_style_text_color(l, lv_color_hex(0xBBD4DA), 0);
+    lv_obj_set_style_text_font(l, &lv_font_montserrat_18, 0);
     lv_obj_align(l, LV_ALIGN_TOP_MID, 0, y);
   };
   auto dropdown = [&](const char* options, int y, int value, lv_event_cb_t cb) {
@@ -4071,6 +4076,7 @@ void Ui::open_v13_menu(int page) {
     lv_obj_set_width(d, 284);
     lv_obj_align(d, LV_ALIGN_TOP_MID, 0, y);
     lv_dropdown_set_options(d, options);
+    lv_obj_set_style_text_font(d, &lv_font_montserrat_20, LV_PART_MAIN);
     lv_dropdown_set_selected(d, value);
     lv_obj_add_event_cb(d, cb, LV_EVENT_VALUE_CHANGED, this);
   };
@@ -4084,6 +4090,9 @@ void Ui::open_v13_menu(int page) {
     lv_obj_set_size(brightness, 270, 18);
     lv_obj_align(brightness, LV_ALIGN_TOP_MID, 0, 111);
     lv_slider_set_range(brightness, 10, 100);
+    lv_obj_set_style_bg_color(brightness, lv_color_hex(0x174752), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(brightness, lv_color_hex(0x29DBE9), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(brightness, lv_color_hex(0xFFFFFF), LV_PART_KNOB);
     lv_slider_set_value(brightness, v13_preferences_.brightness, LV_ANIM_OFF);
     lv_obj_add_event_cb(brightness, [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
@@ -4096,6 +4105,9 @@ void Ui::open_v13_menu(int page) {
     lv_obj_set_size(volume, 270, 18);
     lv_obj_align(volume, LV_ALIGN_TOP_MID, 0, 185);
     lv_slider_set_range(volume, 0, 100);
+    lv_obj_set_style_bg_color(volume, lv_color_hex(0x174752), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(volume, lv_color_hex(0x29DBE9), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(volume, lv_color_hex(0xFFFFFF), LV_PART_KNOB);
     lv_slider_set_value(volume, sound_notifier_ ? sound_notifier_->volume_percent() : 60,
                         LV_ANIM_OFF);
     lv_obj_add_event_cb(volume, [](lv_event_t* e) {
@@ -4118,24 +4130,24 @@ void Ui::open_v13_menu(int page) {
     lv_obj_add_flag(nav_list, LV_OBJ_FLAG_SCROLLABLE);
     auto nav_card = [&](const char* caption, int position, lv_event_cb_t callback) {
       lv_obj_t* card = lv_button_create(nav_list);
-      lv_obj_set_size(card, 288, 62);
-      lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 4 + position * 72);
+      lv_obj_set_size(card, 288, 68);
+      lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 4 + position * 78);
       lv_obj_set_style_radius(card, 17, 0);
-      lv_obj_set_style_bg_color(card, lv_color_hex(0x0B252C), 0);
-      lv_obj_set_style_bg_color(card, lv_color_hex(0x0C4D58), LV_STATE_PRESSED);
+      lv_obj_set_style_bg_color(card, lv_color_hex(0x10424D), 0);
+      lv_obj_set_style_bg_color(card, lv_color_hex(0x176270), LV_STATE_PRESSED);
       lv_obj_set_style_border_width(card, 1, 0);
       lv_obj_set_style_border_width(card, 2, LV_STATE_PRESSED);
       lv_obj_set_style_border_color(card, lv_color_hex(0x22535A), 0);
-      lv_obj_set_style_border_color(card, lv_color_hex(0x32EBF7), LV_STATE_PRESSED);
+      lv_obj_set_style_border_color(card, lv_color_hex(0x29DBE9), LV_STATE_PRESSED);
       lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
       lv_obj_t* item_name = lv_label_create(card);
       lv_label_set_text(item_name, caption);
-      lv_obj_set_style_text_font(item_name, &dosis_20, 0);
+      lv_obj_set_style_text_font(item_name, &lv_font_montserrat_20, 0);
       lv_obj_set_style_text_color(item_name, lv_color_hex(0xE9FFFF), 0);
       lv_obj_align(item_name, LV_ALIGN_LEFT_MID, 13, 0);
       lv_obj_t* chevron = lv_label_create(card);
       lv_label_set_text(chevron, LV_SYMBOL_RIGHT);
-      lv_obj_set_style_text_color(chevron, lv_color_hex(0x32EBF7), 0);
+      lv_obj_set_style_text_color(chevron, lv_color_hex(0x29DBE9), 0);
       lv_obj_align(chevron, LV_ALIGN_RIGHT_MID, -13, 0);
       lv_obj_add_event_cb(card, callback, LV_EVENT_CLICKED, this);
     };
@@ -4202,10 +4214,10 @@ void Ui::open_v13_menu(int page) {
       lv_obj_align(row, LV_ALIGN_TOP_MID, 0, 4 + position * 90);
       lv_obj_set_style_radius(row, 18, 0);
       lv_obj_set_style_pad_all(row, 0, 0);
-      lv_obj_set_style_bg_color(row, lv_color_hex(focused ? 0x0C4D58 : 0x0B252C), 0);
+      lv_obj_set_style_bg_color(row, lv_color_hex(focused ? 0x176270 : 0x10424D), 0);
       lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
       lv_obj_set_style_border_width(row, focused ? 2 : 1, 0);
-      lv_obj_set_style_border_color(row, lv_color_hex(focused ? 0x32EBF7 : 0x22535A), 0);
+      lv_obj_set_style_border_color(row, lv_color_hex(focused ? 0x29DBE9 : 0x22535A), 0);
       lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
       lv_obj_add_event_cb(row, [](lv_event_t* e) {
         auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
@@ -4217,7 +4229,7 @@ void Ui::open_v13_menu(int page) {
       lv_obj_t* name = lv_label_create(row);
       lv_label_set_text(name, kSortNames[item_id]);
       lv_obj_set_style_text_color(name, lv_color_hex(focused ? 0xFFFFFF : 0xB8D4D8), 0);
-      lv_obj_set_style_text_font(name, &dosis_20, 0);
+      lv_obj_set_style_text_font(name, &lv_font_montserrat_20, 0);
       lv_obj_align(name, LV_ALIGN_LEFT_MID, 13, 0);
 
       auto arrow = [&](bool move_up, int inset) {
@@ -4226,7 +4238,7 @@ void Ui::open_v13_menu(int page) {
         lv_obj_align(control, LV_ALIGN_RIGHT_MID, inset, 0);
         lv_obj_set_style_radius(control, 13, 0);
         lv_obj_set_style_bg_color(control,
-            lv_color_hex(focused ? 0x087A8C : 0x12434C), 0);
+            lv_color_hex(focused ? 0x087A8C : 0x10424D), 0);
         lv_obj_t* glyph = lv_label_create(control);
         lv_label_set_text(glyph, move_up ? LV_SYMBOL_UP : LV_SYMBOL_DOWN);
         lv_obj_set_style_text_color(glyph, lv_color_hex(0xE8FFFF), 0);
@@ -4273,9 +4285,12 @@ void Ui::open_v13_menu(int page) {
       lv_obj_set_size(control, 131, 42);
       lv_obj_align(control, LV_ALIGN_TOP_MID, x, 364);
       lv_obj_set_style_radius(control, 20, 0);
-      lv_obj_set_style_bg_color(control, lv_color_hex(0x146D73), 0);
+      lv_obj_set_style_bg_color(control, lv_color_hex(0x10424D), 0);
+      lv_obj_set_style_border_width(control, 1, 0);
+      lv_obj_set_style_border_color(control, lv_color_hex(0x29DBE9), 0);
       lv_obj_t* caption_label = lv_label_create(control);
       lv_label_set_text(caption_label, caption);
+      lv_obj_set_style_text_font(caption_label, &lv_font_montserrat_20, 0);
       lv_obj_center(caption_label);
       lv_obj_add_event_cb(control, callback, LV_EVENT_CLICKED, this);
     };
