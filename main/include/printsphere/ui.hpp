@@ -54,6 +54,10 @@ class Ui {
   void set_battery_display_policy(const BatteryDisplayPolicy& policy);
   bool is_low_power_mode_active() const;
   ScreenPowerMode screen_power_mode() const { return screen_power_mode_; }
+  // Keep the display awake while a job runs and for 10 minutes afterward.
+  bool print_screen_hold_active() const {
+    return print_screen_hold_active_.load(std::memory_order_relaxed);
+  }
   bool is_config_page_active() const {
     return !page_scrolling_snapshot_.load(std::memory_order_relaxed) &&
            active_page_snapshot_.load(std::memory_order_relaxed) == kPageIdxPrinterSelect;
@@ -128,6 +132,9 @@ class Ui {
   void handle_pager_event(lv_event_t* event);
   void handle_screen_event(lv_event_t* event);
   void handle_face_event(lv_event_t* event);
+  void show_faces_home_locked();
+  void show_printer_home_locked();
+  void update_print_screen_focus_locked(const PrinterSnapshot& snapshot);
   void open_v13_menu(int page);
   void close_v13_menu();
   void refresh_v13_face();
@@ -179,7 +186,12 @@ class Ui {
   V13MenuPreferences v13_preferences_{};
   uint8_t v13_sort_selected_ = 0;
   bool face_home_visible_ = false;
+  lv_coord_t face_touch_start_x_ = 0;
   lv_coord_t face_touch_start_y_ = 0;
+  bool auto_print_running_ = false;
+  bool auto_print_return_pending_ = false;
+  uint32_t auto_print_finished_at_ms_ = 0;
+  std::atomic<bool> print_screen_hold_active_{false};
   lv_obj_t* fixed_overlay_ = nullptr;
   lv_obj_t* page0_ = nullptr;
   lv_obj_t* page0_title_ = nullptr;

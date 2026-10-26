@@ -754,11 +754,11 @@ void Application::run() {
     const bool provisioning_active =
         snapshot.setup_ap_active ||
         snapshot.connection == PrinterConnectionState::kWaitingForCredentials;
-    // Hard wake-lock only for provisioning / camera page / page transitions.
-    // An active print no longer forces the screen awake — it just switches the
-    // energy policy to the "during print" timeouts (see update_power_save).
+    // Keep the printer screen lit during a job and for 10 minutes after
+    // completion or failure. Normal dimming resumes on Faces Home.
     const bool keep_screen_awake =
-        provisioning_active || camera_page_active || page_transition_active;
+        provisioning_active || camera_page_active || page_transition_active ||
+        ui_.print_screen_hold_active();
     if (filament_wake_enabled_ && is_filament && is_external_spool) {
       // External-spool filament change needs the user at the printer: wake once.
       ui_.request_wake_display();

@@ -79,6 +79,7 @@ constexpr int kPage3StatusAboveImageY = -138;
 constexpr int kAuxTempRowY = 28;
 constexpr int kSwipeThresholdPx = 24;
 constexpr int kGestureAxisLockMarginPx = 16;
+constexpr uint32_t kPostPrintScreenHoldMs = 10U * 60U * 1000U;
 constexpr int kRotatedVisualOffsetX = 0;
 constexpr int kRotatedVisualOffsetY = 0;
 constexpr uint8_t kRingPulseDepthPercent = 55U;
@@ -1981,6 +1982,10 @@ void Ui::apply_snapshot_locked(const PrinterSnapshot& snapshot, bool force_ring_
   deferred_snapshot_pending_ = false;
   update_page_availability_locked(snapshot);
 
+  // Track jobs by lifecycle, not just print_active: preparation and pause
+  // must keep the printer dashboard open, too.
+  update_print_screen_focus_locked(snapshot);
+
   bool wake_due_to_state_change = false;
   if (!snapshot.ui_status.empty() && snapshot.ui_status != last_ui_status_) {
     wake_due_to_state_change = true;
@@ -1989,13 +1994,7 @@ void Ui::apply_snapshot_locked(const PrinterSnapshot& snapshot, bool force_ring_
   if (snapshot.print_active != last_print_active_) {
     wake_due_to_state_change = true;
     last_print_active_ = snapshot.print_active;
-    if (snapshot.print_active && face_home_visible_ && face_home_ != nullptr) {
-      lv_obj_add_flag(face_home_, LV_OBJ_FLAG_HIDDEN);
-      if (face_renderer_) face_renderer_->SetVisible(false);
-      face_home_visible_ = false;
-      set_active_page(kPageIdxMain);
-    }
-  }
+   }
   if (wake_due_to_state_change) {
     note_activity(true);
   }
@@ -3345,6 +3344,73 @@ esp_err_t Ui::build_dashboard() {
   return ESP_OK;
 }
 
+void Ui::show_faces_home_locked() {
+  if (face_home_ == nullptr) return;
+  lv_obj_clear_flag(face_home_, LV_OBJ_FLAG_HIDDEN);
+  if (face_renderer_) face_renderer_->SetVisible(true);
+  face_home_visible_ = true;
+  v13_face_options_.Activity(lv_tick_get());
+  // Leave an open settings menu usable; otherwise bring the face forward.
+  if (v13_menu_ != nullptr && !lv_obj_has_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN)) {
+    lv_obj_move_foreground(v13_menu_);
+  } else {
+    lv_obj_move_foreground(face_home_);
+  }
+  note_activity(true);
+}
+
+void Ui::show_printer_home_locked() {
+  if (face_home_ != nullptr) {
+    lv_obj_add_flag(face_home_, LV_OBJ_FLAG_HIDDEN);
+    if (face_renderer_) face_renderer_->SetVisible(false);
+  }
+  face_home_visible_ = false;
+  close_v13_menu();
+  if (active_page_ != kPageIdxMain) {
+    set_active_page(kPageIdxMain);
+  }
+  note_activity(true);
+}
+
+void Ui::update_print_screen_focus_locked(const PrinterSnapshot& snapshot) {
+  const PrintLifecycleState lifecycle = snapshot.lifecycle;
+  const bool finished_or_failed =
+      lifecycle == PrintLifecycleState::kFinished ||
+      lifecycle == PrintLifecycleState::kError;
+  const bool job_running = !finished_or_failed &&
+      (snapshot.print_active || lifecycle == PrintLifecycleState::kPreparing ||
+       lifecycle == PrintLifecycleState::kPrinting ||
+       lifecycle == PrintLifecycleState::kPaused);
+  const uint32_t now_ms = lv_tick_get();
+
+  if (job_running) {
+    // Only switch pages at the start of a new job. Manual upward swipes
+    // still work without snapping back every status update.
+    if (!auto_print_running_) {
+      auto_print_running_ = true;
+      auto_print_return_pending_ = false;
+      show_printer_home_locked();
+    }
+  } else if (auto_print_running_ &&
+             (finished_or_failed || lifecycle == PrintLifecycleState::kIdle)) {
+    // Finished, failed, or stopped: keep showing the result for 10 minutes.
+    auto_print_running_ = false;
+    auto_print_return_pending_ = true;
+    auto_print_finished_at_ms_ = now_ms;
+  }
+
+  if (auto_print_return_pending_ && !auto_print_running_ &&
+      static_cast<uint32_t>(now_ms - auto_print_finished_at_ms_) >=
+          kPostPrintScreenHoldMs) {
+    auto_print_return_pending_ = false;
+    show_faces_home_locked();
+  }
+
+  print_screen_hold_active_.store(
+      auto_print_running_ || auto_print_return_pending_,
+      std::memory_order_relaxed);
+}
+
 void Ui::apply_page_visibility() {
   LvglLockGuard::note_phase("page_visibility");
   // Page content labels are children of their respective page objects which live
@@ -3791,8 +3857,13 @@ void Ui::handle_screen_event(lv_event_t* event) {
     if (swipe_locked) {
       return;
     }
+    if (dy >= kSwipeThresholdPx && abs_dy > abs_dx + kGestureAxisLockMarginPx) {
+      // Bottom-to-top toggles the printer dashboard to Faces Home.
+      show_faces_home_locked();
+      return;
+    }
     if (dy <= -kSwipeThresholdPx && abs_dy > abs_dx + kGestureAxisLockMarginPx) {
-      // v13 Control Center on a downward swipe from the printer pages.
+      // Top-to-bottom still opens Control Center; no horizontal app shortcuts.
       open_v13_menu(0);
       return;
     }
@@ -4252,13 +4323,8 @@ void Ui::open_v13_menu(int page) {
         }); break;
         case 5: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
           auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
-          if (ui->face_home_) {
-            lv_obj_clear_flag(ui->face_home_, LV_OBJ_FLAG_HIDDEN);
-            if (ui->face_renderer_) ui->face_renderer_->SetVisible(true);
-            ui->face_home_visible_ = true;
-            lv_obj_move_foreground(ui->face_home_);
-          }
           ui->close_v13_menu();
+          ui->show_faces_home_locked();
         }); break;
       }
     }
@@ -4561,19 +4627,23 @@ void Ui::handle_face_event(lv_event_t* event) {
   lv_point_t point{};
   lv_indev_get_point(indev, &point);
   if (code == LV_EVENT_PRESSED) {
+    face_touch_start_x_ = point.x;
     face_touch_start_y_ = point.y;
     v13_face_options_.Activity(lv_tick_get());
     note_activity(false);
-  } else if (point.y - face_touch_start_y_ >= kSwipeThresholdPx) {
-    // v13 swipe-down opens the Control Center, not brightness control.
-    open_v13_menu(0);
-  } else if (face_touch_start_y_ - point.y >= kSwipeThresholdPx) {
-    // v13 swipe-up opens the existing printer dashboard.
-    lv_obj_add_flag(face_home_, LV_OBJ_FLAG_HIDDEN);
-    if (face_renderer_) face_renderer_->SetVisible(false);
-    face_home_visible_ = false;
-    set_active_page(kPageIdxMain);
-    note_activity(false);
+  } else {
+    const int dx = static_cast<int>(point.x - face_touch_start_x_);
+    const int dy = static_cast<int>(face_touch_start_y_ - point.y);
+    if (dy >= kSwipeThresholdPx &&
+        dy > std::abs(dx) + kGestureAxisLockMarginPx) {
+      // Bottom-to-top toggles Faces Home to the printer dashboard.
+      show_printer_home_locked();
+    } else if (dy <= -kSwipeThresholdPx &&
+               -dy > std::abs(dx) + kGestureAxisLockMarginPx) {
+      // Keep top-to-bottom as the Control Center gesture.
+      open_v13_menu(0);
+    }
+    // Left/right swipes never open the menu or switch between apps.
   }
 }
 
