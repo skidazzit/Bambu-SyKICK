@@ -4,11 +4,7 @@
  * Opts: --font /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf -r 0x20-0x7E --size 32 --bpp 4 --format lvgl --lv-font-name syk_dejavu_32 --lv-fallback lv_font_montserrat_20 -o /tmp/syk_dejavu_32.c
  ******************************************************************************/
 
-#ifdef LV_LVGL_H_INCLUDE_SIMPLE
 #include "lvgl.h"
-#else
-#include "lvgl/lvgl.h"
-#endif
 
 #ifndef SYK_DEJAVU_32
 #define SYK_DEJAVU_32 1
