@@ -768,8 +768,8 @@ void Application::run() {
     const bool provisioning_active =
         snapshot.setup_ap_active ||
         snapshot.connection == PrinterConnectionState::kWaitingForCredentials;
-    // Keep the printer screen lit during a job and for 10 minutes after
-    // completion or failure. Normal dimming resumes on Faces Home.
+    // Keep the printer screen lit during a job and during the five-minute
+    // no-print timeout. Normal dimming resumes on Faces Home.
     const bool keep_screen_awake =
         provisioning_active || camera_page_active || page_transition_active ||
         ui_.print_screen_hold_active();

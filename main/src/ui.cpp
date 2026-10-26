@@ -77,7 +77,7 @@ constexpr int kPage3StatusAboveImageY = -138;
 constexpr int kAuxTempRowY = 28;
 constexpr int kSwipeThresholdPx = 24;
 constexpr int kGestureAxisLockMarginPx = 16;
-constexpr uint32_t kPostPrintScreenHoldMs = 10U * 60U * 1000U;
+constexpr uint32_t kIdlePrinterReturnMs = 5U * 60U * 1000U;
 constexpr int kRotatedVisualOffsetX = 0;
 constexpr int kRotatedVisualOffsetY = 0;
 constexpr uint8_t kRingPulseDepthPercent = 55U;
@@ -3347,6 +3347,7 @@ esp_err_t Ui::build_dashboard() {
 
 void Ui::show_faces_home_locked() {
   if (face_home_ == nullptr) return;
+  idle_printer_timer_active_ = false;
   lv_obj_clear_flag(face_home_, LV_OBJ_FLAG_HIDDEN);
   if (face_renderer_) face_renderer_->SetVisible(true);
   face_home_visible_ = true;
@@ -3370,6 +3371,11 @@ void Ui::show_printer_home_locked() {
   if (active_page_ != kPageIdxMain) {
     set_active_page(kPageIdxMain);
   }
+  // Manual opening while idle also gets a five-minute return to Faces.
+  if (!auto_print_running_) {
+    idle_printer_timer_active_ = true;
+    idle_printer_since_ms_ = lv_tick_get();
+  }
   note_activity(true);
 }
 
@@ -3385,30 +3391,33 @@ void Ui::update_print_screen_focus_locked(const PrinterSnapshot& snapshot) {
   const uint32_t now_ms = lv_tick_get();
 
   if (job_running) {
-    // Only switch pages at the start of a new job. Manual upward swipes
-    // still work without snapping back every status update.
+    // A real print takes priority over the idle timeout, even when paused.
+    // Only open the dashboard at the start of a new job; manual swipes work.
+    idle_printer_timer_active_ = false;
     if (!auto_print_running_) {
       auto_print_running_ = true;
-      auto_print_return_pending_ = false;
       show_printer_home_locked();
     }
   } else if (auto_print_running_ &&
              (finished_or_failed || lifecycle == PrintLifecycleState::kIdle)) {
-    // Finished, failed, or stopped: keep showing the result for 10 minutes.
+    // Keep the result visible for five minutes after a job ends or fails.
     auto_print_running_ = false;
-    auto_print_return_pending_ = true;
-    auto_print_finished_at_ms_ = now_ms;
+    if (!face_home_visible_) {
+      idle_printer_timer_active_ = true;
+      idle_printer_since_ms_ = now_ms;
+    }
   }
 
-  if (auto_print_return_pending_ && !auto_print_running_ &&
-      static_cast<uint32_t>(now_ms - auto_print_finished_at_ms_) >=
-          kPostPrintScreenHoldMs) {
-    auto_print_return_pending_ = false;
+  // Also applies when the printer app is opened by hand with no job running.
+  // Touching or viewing the camera does not restart this idle countdown.
+  if (idle_printer_timer_active_ && !auto_print_running_ && !face_home_visible_ &&
+      static_cast<uint32_t>(now_ms - idle_printer_since_ms_) >=
+          kIdlePrinterReturnMs) {
     show_faces_home_locked();
   }
 
   print_screen_hold_active_.store(
-      auto_print_running_ || auto_print_return_pending_,
+      auto_print_running_ || (idle_printer_timer_active_ && !face_home_visible_),
       std::memory_order_relaxed);
 }
 
