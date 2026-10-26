@@ -454,7 +454,7 @@
               </div>
               <div class="fact">
                 <span>Version</span>
-                <strong id="firmware-version">v1.6.2</strong>
+                <strong id="firmware-version">v1.7.0</strong>
               </div>
               <div class="fact">
                 <span>Flash offset</span>
@@ -462,11 +462,10 @@
               </div>
             </div>
 
-            <p class="note warning">Current download files are unmodified PrintSphere firmware binaries. Bambu SyKICK device branding and setup Wi-Fi changes require a new compiled release. Do not use these files to test the new branding.</p>
+            <p class="note warning">Factory flashing may erase saved Wi-Fi and printer settings. Use the OTA update below for an already configured device.</p>
             <p class="note" id="firmware-note"></p>
             <p class="note warning" id="beta-warning" hidden>
-              Beta versions are newer, but they are meant for testing and may not be as reliable
-              as the stable version.
+              Beta builds are for testing. Install a stable version unless you are testing a new feature.
             </p>
 
             <div class="install-row">
@@ -487,7 +486,7 @@
               alt="Bambu SyKICK circular display device"
             >
             <div class="caption">
-              <strong id="caption-version">Stable v1.6.2</strong>
+              <strong id="caption-version">Stable v1.7.0</strong>
               <span id="caption-path">release/initial/printsphere_full.bin</span>
             </div>
           </aside>
@@ -528,13 +527,13 @@
     <script>
       const firmwares = [
         {
-          label: "Stable v1.6.2 (1.75 AMOLED)",
+          label: "Stable v1.7.0 (1.75 AMOLED)",
           channel: "Stable",
-          version: "v1.6.2",
+          version: "v1.7.0",
           path: "../release/initial/printsphere_full.bin",
           displayPath: "release/initial/printsphere_full.bin",
-          otaUrl: "https://github.com/skidazzit/Bambu-SyKICK/blob/main/release/ota/printsphere_ota.bin",
-          note: "Factory flash erases device data before installing v1.6.2. Keep the USB cable connected after the flash: the Wi-Fi picker appears automatically, so the setup hotspot is only needed as a fallback.",
+          otaUrl: "https://raw.githubusercontent.com/skidazzit/Bambu-SyKICK/main/release/ota/printsphere_ota.bin",
+          note: "Stable v1.7.0 for Waveshare 1.75 AMOLED. Factory flashing can clear saved settings; use OTA to keep Wi-Fi and printer profiles. The display opens Bambu on print start and returns to Faces 10 minutes after a job ends.",
         },
         {
           label: 'Stable v1.6.2 (2.8" LCD)',
@@ -542,16 +541,16 @@
           version: "v1.6.2-2.8C",
           path: "../release/2.8c/initial/printsphere_full.bin",
           displayPath: "release/2.8c/initial/printsphere_full.bin",
-          otaUrl: "https://github.com/skidazzit/Bambu-SyKICK/blob/main/release/2.8c/ota/printsphere_ota.bin",
+          otaUrl: "https://raw.githubusercontent.com/skidazzit/Bambu-SyKICK/main/release/2.8c/ota/printsphere_ota.bin",
           note: 'Factory flash image for the ESP32-S3-Touch-LCD-2.8C hardware variant on v1.6.2. Keep the USB cable connected after the flash: the Wi-Fi picker appears automatically, so the setup hotspot is only needed as a fallback.',
         },
         {
-          label: "Bambu SyKICK Beta v1.6.2-sykick-beta.1 (1.75 AMOLED) — device test pending",
+          label: "Beta channel (next test build coming soon)",
           channel: "Beta",
-          version: "v1.6.2-sykick-beta.1",
+          version: "Not released",
           available: false,
-          displayPath: "GitHub Actions beta artifact (not released)",
-          note: "The ESP-IDF build, image header and checksum checks passed. Physical-device testing is still required before this beta can be installed from the website.",
+          displayPath: "No newer beta is published",
+          note: "The former beta has been promoted to stable v1.7.0 for the 1.75-inch AMOLED. Future test builds will appear here after checks pass.",
         },
       ];
 
