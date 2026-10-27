@@ -454,7 +454,7 @@
               </div>
               <div class="fact">
                 <span>Version</span>
-                <strong id="firmware-version">v1.7.1</strong>
+                <strong id="firmware-version">v1.7.2</strong>
               </div>
               <div class="fact">
                 <span>Flash offset</span>
@@ -486,7 +486,7 @@
               alt="Bambu SyKICK circular display device"
             >
             <div class="caption">
-              <strong id="caption-version">Stable v1.7.1</strong>
+              <strong id="caption-version">Stable v1.7.2</strong>
               <span id="caption-path">release/initial/printsphere_full.bin</span>
             </div>
           </aside>
@@ -527,13 +527,22 @@
     <script>
       const firmwares = [
         {
-          label: "Stable v1.7.1 (1.75 AMOLED)",
+          label: "Stable v1.7.2 (1.75 AMOLED)",
           channel: "Stable",
-          version: "v1.7.1",
+          version: "v1.7.2",
           path: "../release/initial/printsphere_full.bin",
           displayPath: "release/initial/printsphere_full.bin",
           otaUrl: "https://raw.githubusercontent.com/skidazzit/Bambu-SyKICK/main/release/ota/printsphere_ota.bin",
-          note: "Latest stable v1.7.1 for Waveshare 1.75 AMOLED. Larger faces, a simpler sortable menu, and camera snapshots. After a print ends, or after five minutes of idle printer view, Faces returns. Use OTA to keep Wi-Fi and printer settings.",
+          note: "Latest stable v1.7.2 for Waveshare 1.75 AMOLED. Removes the top-center battery icon and percent from all screens. Battery monitoring and the USB charging effect remain available. Use OTA to keep Wi-Fi and printer settings.",
+        },
+        {
+          label: "Stable v1.7.1 (1.75 AMOLED rollback)",
+          channel: "Stable",
+          version: "v1.7.1",
+          path: "../release/initial/archive/printsphere_full-v1.7.1.bin",
+          displayPath: "release/initial/archive/printsphere_full-v1.7.1.bin",
+          otaUrl: "https://raw.githubusercontent.com/skidazzit/Bambu-SyKICK/main/release/ota/archive/printsphere_ota-v1.7.1.bin",
+          note: "Previous stable v1.7.1 before the battery badge was removed. Factory flashing may erase Wi-Fi and printer settings; archived OTA updates normally retain them.",
         },
         {
           label: "Stable v1.7.0 (1.75 AMOLED rollback)",

@@ -8,7 +8,7 @@ option(BAMBU_SYKICK_BETA "Build a separately versioned Bambu SyKICK test firmwar
 if(BAMBU_SYKICK_BETA)
     set(PRINTSPHERE_RELEASE_VERSION "v1.6.2-sykick-beta.1")
 else()
-    set(PRINTSPHERE_RELEASE_VERSION "v1.7.1")
+    set(PRINTSPHERE_RELEASE_VERSION "v1.7.2")
 endif()
 set(PROJECT_VER "${PRINTSPHERE_RELEASE_VERSION}")
 set(PRINTSPHERE_HW_VARIANT "lcd_2_8c" CACHE STRING
