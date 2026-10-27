@@ -4311,7 +4311,7 @@ void Ui::open_v13_menu(int page) {
       lv_obj_add_event_cb(card, callback, LV_EVENT_CLICKED, this);
     };
     constexpr const char* kNames[] = {
-        "Face Options", "Display", "Wi-Fi", "Clock", "Sound", "Faces Home"
+        "Face Options", "Display", "Wi-Fi", "Clock", "Sound"
     };
     for (size_t position = 0; position < v13_preferences_.menu_order.size(); ++position) {
       const uint8_t id = v13_preferences_.menu_order[position];
@@ -4331,17 +4331,12 @@ void Ui::open_v13_menu(int page) {
         case 4: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
           static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(7);
         }); break;
-        case 5: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
-          auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
-          ui->close_v13_menu();
-          ui->show_faces_home_locked();
-        }); break;
       }
     }
-    nav_card("Sort Menu", 6, [](lv_event_t* e) {
+    nav_card("Sort Menu", 5, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(8);
     });
-    nav_card("About", 7, [](lv_event_t* e) {
+    nav_card("About", 6, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
     });
     // Two fixed touch targets in the round-safe footer.
@@ -4368,9 +4363,9 @@ void Ui::open_v13_menu(int page) {
   } else if (safe_page == 8) {
     // Focused sort: a round-screen-safe scrolling list with 52px arrow targets.
     lv_obj_remove_flag(v13_menu_, LV_OBJ_FLAG_SCROLLABLE);
-    v13_sort_selected_ = std::min<uint8_t>(v13_sort_selected_, 5);
+    v13_sort_selected_ = std::min<uint8_t>(v13_sort_selected_, 4);
     constexpr const char* kSortNames[] = {
-        "Face Options", "Display", "Wi-Fi", "Clock", "Sound", "Faces Home"
+        "Face Options", "Display", "Wi-Fi", "Clock", "Sound"
     };
     lv_obj_t* sort_list = lv_obj_create(v13_menu_);
     lv_obj_set_size(sort_list, 338, 266);
@@ -4471,7 +4466,7 @@ void Ui::open_v13_menu(int page) {
     };
     footer("Reset", -73, [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
-      ui->v13_preferences_.menu_order = {{0, 1, 2, 3, 4, 5}};
+      ui->v13_preferences_.menu_order = {{0, 1, 2, 3, 4}};
       ui->v13_sort_selected_ = 0;
       save_v13_menu_preferences(ui->v13_preferences_);
       ui->open_v13_menu(8);

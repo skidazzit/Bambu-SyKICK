@@ -32,10 +32,10 @@ void V13MenuPreferences::clamp() {
   idle_brightness = std::min<uint8_t>(idle_brightness, 50);
   volume = std::min<uint8_t>(volume, 100);
   language = std::min<uint8_t>(language, 2);
-  bool seen[6] = {};
+  bool seen[5] = {};
   for (uint8_t value : menu_order) {
-    if (value >= 6 || seen[value]) {
-      menu_order = {{0, 1, 2, 3, 4, 5}};
+    if (value >= 5 || seen[value]) {
+      menu_order = {{0, 1, 2, 3, 4}};
       break;
     }
     seen[value] = true;
@@ -67,10 +67,23 @@ esp_err_t load_v13_menu_preferences(V13MenuPreferences* prefs) {
   prefs->time_zone_choice = read_u8(handle, "time_zone", prefs->time_zone_choice);
   prefs->clock_24_hour = read_u8(handle, "clock_24h", 0) != 0;
   prefs->show_clock_on_home = read_u8(handle, "home_clock", 0) != 0;
-  for (uint8_t i = 0; i < prefs->menu_order.size(); ++i) {
+  // Load old six-item orders too. Drop legacy Faces Home (id 5) while
+  // keeping the relative order of the five remaining menu links.
+  bool used[5] = {};
+  uint8_t next = 0;
+  for (uint8_t i = 0; i < 6; ++i) {
     char key[12] = {};
     std::snprintf(key, sizeof(key), "menu_ord_%u", static_cast<unsigned>(i));
-    prefs->menu_order[i] = read_u8(handle, key, i);
+    const uint8_t id = read_u8(handle, key, i);
+    if (id < 5 && !used[id] && next < prefs->menu_order.size()) {
+      prefs->menu_order[next++] = id;
+      used[id] = true;
+    }
+  }
+  for (uint8_t id = 0; id < 5; ++id) {
+    if (!used[id] && next < prefs->menu_order.size()) {
+      prefs->menu_order[next++] = id;
+    }
   }
   nvs_close(handle);
   prefs->clamp();
