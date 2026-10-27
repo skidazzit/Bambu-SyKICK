@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "esp_heap_caps.h"
+#include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_memory_utils.h"
 #include "esp_timer.h"
@@ -22,9 +23,10 @@ namespace {
 constexpr char kTag[] = "printsphere.camera";
 constexpr uint16_t kCameraPort = 6000;
 constexpr size_t kFrameHeaderBytes = 16;
-constexpr size_t kMaxFrameBytes = 256U * 1024U;
+constexpr size_t kMaxFrameBytes = 512U * 1024U;
 constexpr size_t kImagePersistentReserveBytes = 20U * 1024U;
-constexpr int64_t kAutoRefreshIntervalUs = 1500000;
+// Poll at most once per second while the camera page is open.
+constexpr int64_t kAutoRefreshIntervalUs = 1000000;
 constexpr int64_t kTlsReadDeadlineUs = 4000000;
 constexpr int64_t kTlsWriteDeadlineUs = 2000000;
 constexpr uint16_t kTargetWidth = 400;
@@ -32,6 +34,28 @@ constexpr uint16_t kTargetHeight = 224;
 
 bool has_frame_data(const std::shared_ptr<std::vector<uint8_t>>& frame_blob) {
   return frame_blob && !frame_blob->empty();
+}
+
+struct HttpJpegReceiver {
+  std::shared_ptr<std::vector<uint8_t>> bytes =
+      std::make_shared<std::vector<uint8_t>>();
+  bool overflow = false;
+};
+
+esp_err_t camera_http_event(esp_http_client_event_t* event) {
+  if (event == nullptr || event->user_data == nullptr ||
+      event->event_id != HTTP_EVENT_ON_DATA || event->data_len <= 0) {
+    return ESP_OK;
+  }
+  auto* receiver = static_cast<HttpJpegReceiver*>(event->user_data);
+  const size_t size = static_cast<size_t>(event->data_len);
+  if (receiver->overflow || size > kMaxFrameBytes - receiver->bytes->size()) {
+    receiver->overflow = true;
+    return ESP_FAIL;
+  }
+  const auto* data = static_cast<const uint8_t*>(event->data);
+  receiver->bytes->insert(receiver->bytes->end(), data, data + size);
+  return ESP_OK;
 }
 
 uint32_t little_u32(const uint8_t* data) {
@@ -118,7 +142,7 @@ void P1sCameraClient::configure(PrinterConnection connection) {
   if (connection.mqtt_username.empty()) {
     connection.mqtt_username = "bblp";
   }
-  const bool configured = connection.is_ready();
+  const bool configured = connection.is_ready() || has_snapshot_url();
 
   {
     std::lock_guard<std::mutex> lock(config_mutex_);
@@ -134,13 +158,33 @@ void P1sCameraClient::configure(PrinterConnection connection) {
   set_snapshot(std::move(snapshot));
 }
 
+void P1sCameraClient::set_snapshot_url(std::string url) {
+  {
+    std::lock_guard<std::mutex> lock(config_mutex_);
+    if (snapshot_url_ == url) return;
+    snapshot_url_ = std::move(url);
+  }
+  reconfigure_requested_.store(true);
+  refresh_requested_.store(true);
+}
+
+bool P1sCameraClient::has_snapshot_url() const {
+  std::lock_guard<std::mutex> lock(config_mutex_);
+  return !snapshot_url_.empty();
+}
+
 bool P1sCameraClient::is_configured() const {
-  return desired_connection().is_ready();
+  return desired_connection().is_ready() || has_snapshot_url();
 }
 
 PrinterConnection P1sCameraClient::desired_connection() const {
   std::lock_guard<std::mutex> lock(config_mutex_);
   return desired_connection_;
+}
+
+std::string P1sCameraClient::desired_snapshot_url() const {
+  std::lock_guard<std::mutex> lock(config_mutex_);
+  return snapshot_url_;
 }
 
 esp_err_t P1sCameraClient::start() {
@@ -327,10 +371,58 @@ bool P1sCameraClient::decode_frame_rgb565(const std::shared_ptr<std::vector<uint
     return false;
   }
 
+  // Probe the source dimensions with resizing OFF. Espressif's JPEG decoder
+  // rejects a requested width/height larger than the input. This also avoids
+  // allocating an entire full-resolution output for large camera frames.
+  jpeg_dec_config_t probe_config = DEFAULT_JPEG_DEC_CONFIG();
+  probe_config.output_type = JPEG_PIXEL_FORMAT_RGB565_LE;
+  jpeg_dec_handle_t probe = nullptr;
+  if (jpeg_dec_open(&probe_config, &probe) != JPEG_ERR_OK || probe == nullptr) {
+    ESP_LOGW(kTag, "JPEG probe open failed");
+    return false;
+  }
+  jpeg_dec_io_t probe_io = {};
+  probe_io.inbuf = const_cast<uint8_t*>(jpeg_blob->data());
+  probe_io.inbuf_len = static_cast<int>(jpeg_blob->size());
+  jpeg_dec_header_info_t source = {};
+  const jpeg_error_t probe_error = jpeg_dec_parse_header(probe, &probe_io, &source);
+  jpeg_dec_close(probe);
+  if (probe_error != JPEG_ERR_OK || source.width == 0U || source.height == 0U) {
+    ESP_LOGW(kTag, "JPEG source header invalid");
+    return false;
+  }
+
   jpeg_dec_config_t config = DEFAULT_JPEG_DEC_CONFIG();
   config.output_type = JPEG_PIXEL_FORMAT_RGB565_LE;
-  config.scale.width = kTargetWidth;
-  config.scale.height = kTargetHeight;
+  uint16_t width = source.width;
+  uint16_t height = source.height;
+  if (source.width > kTargetWidth || source.height > kTargetHeight) {
+    // Fit inside the camera viewport without stretching. JPEG scale dimensions
+    // must be multiples of 8 and scaling is limited to a factor of 1/8.
+    uint32_t fit_width = source.width;
+    uint32_t fit_height = source.height;
+    if (static_cast<uint32_t>(source.width) * kTargetHeight >
+        static_cast<uint32_t>(source.height) * kTargetWidth) {
+      fit_width = kTargetWidth;
+      fit_height = static_cast<uint32_t>(source.height) * fit_width / source.width;
+    } else {
+      fit_height = kTargetHeight;
+      fit_width = static_cast<uint32_t>(source.width) * fit_height / source.height;
+    }
+    fit_width = (fit_width / 8U) * 8U;
+    fit_height = (fit_height / 8U) * 8U;
+    if (fit_width == 0U || fit_height == 0U ||
+        static_cast<uint32_t>(source.width) > fit_width * 8U ||
+        static_cast<uint32_t>(source.height) > fit_height * 8U) {
+      ESP_LOGW(kTag, "JPEG %ux%u exceeds scaler range; resize with go2rtc",
+               static_cast<unsigned>(source.width), static_cast<unsigned>(source.height));
+      return false;
+    }
+    width = static_cast<uint16_t>(fit_width);
+    height = static_cast<uint16_t>(fit_height);
+    config.scale.width = width;
+    config.scale.height = height;
+  }
 
   jpeg_dec_handle_t decoder = nullptr;
   jpeg_dec_io_t io = {};
@@ -348,7 +440,9 @@ bool P1sCameraClient::decode_frame_rgb565(const std::shared_ptr<std::vector<uint
   void* aligned_out = nullptr;
   do {
     if (jpeg_dec_parse_header(decoder, &io, &header) != JPEG_ERR_OK) {
-      ESP_LOGW(kTag, "JPEG header parse failed");
+      ESP_LOGW(kTag, "JPEG header parse failed (%ux%u -> %ux%u)",
+               static_cast<unsigned>(source.width), static_cast<unsigned>(source.height),
+               static_cast<unsigned>(width), static_cast<unsigned>(height));
       break;
     }
 
@@ -369,7 +463,9 @@ bool P1sCameraClient::decode_frame_rgb565(const std::shared_ptr<std::vector<uint
 
     io.outbuf = static_cast<uint8_t*>(aligned_out);
     if (jpeg_dec_process(decoder, &io) != JPEG_ERR_OK) {
-      ESP_LOGW(kTag, "JPEG decode failed");
+      ESP_LOGW(kTag, "JPEG decode failed (%ux%u -> %ux%u)",
+               static_cast<unsigned>(source.width), static_cast<unsigned>(source.height),
+               static_cast<unsigned>(width), static_cast<unsigned>(height));
       break;
     }
 
@@ -379,8 +475,11 @@ bool P1sCameraClient::decode_frame_rgb565(const std::shared_ptr<std::vector<uint
     std::memcpy(decoded->data(), aligned_out, static_cast<size_t>(out_len));
     log_blob_diag("camera rgb565 decoded buffer", decoded);
     *out_blob = std::move(decoded);
-    *out_width = config.scale.width > 0U ? config.scale.width : header.width;
-    *out_height = config.scale.height > 0U ? config.scale.height : header.height;
+    *out_width = width;
+    *out_height = height;
+    ESP_LOGI(kTag, "JPEG scaled %ux%u -> %ux%u",
+             static_cast<unsigned>(source.width), static_cast<unsigned>(source.height),
+             static_cast<unsigned>(width), static_cast<unsigned>(height));
     ok = true;
   } while (false);
 
@@ -478,6 +577,48 @@ bool P1sCameraClient::fetch_frame_once(const PrinterConnection& connection) {
   return false;
 }
 
+bool P1sCameraClient::fetch_http_snapshot_once(const std::string& url) {
+  HttpJpegReceiver receiver;
+  esp_http_client_config_t config = {};
+  config.url = url.c_str();
+  config.timeout_ms = 6000;
+  config.buffer_size = 2048;
+  config.event_handler = camera_http_event;
+  config.user_data = &receiver;
+
+  esp_http_client_handle_t client = esp_http_client_init(&config);
+  if (client == nullptr) {
+    ESP_LOGW(kTag, "Cannot start HTTP snapshot request");
+    return false;
+  }
+  esp_http_client_set_header(client, "Accept", "image/jpeg");
+  const esp_err_t err = esp_http_client_perform(client);
+  const int status = esp_http_client_get_status_code(client);
+  esp_http_client_cleanup(client);
+
+  const auto& jpeg = receiver.bytes;
+  if (err != ESP_OK || status != 200 || receiver.overflow ||
+      jpeg->size() < 4U || jpeg->size() > kMaxFrameBytes ||
+      (*jpeg)[0] != 0xFFU || (*jpeg)[1] != 0xD8U ||
+      (*jpeg)[jpeg->size() - 2] != 0xFFU ||
+      (*jpeg)[jpeg->size() - 1] != 0xD9U) {
+    ESP_LOGW(kTag, "HTTP snapshot failed (status=%d, bytes=%u, err=%s)",
+             status, static_cast<unsigned>(jpeg->size()), esp_err_to_name(err));
+    return false;
+  }
+
+  std::shared_ptr<std::vector<uint8_t>> rgb565;
+  uint16_t width = 0;
+  uint16_t height = 0;
+  if (!decode_frame_rgb565(jpeg, &rgb565, &width, &height)) {
+    return false;
+  }
+  if (!enabled_.load()) return false;
+  set_frame_snapshot(true, true, true, "Camera image updated",
+                     std::move(rgb565), width, height);
+  return true;
+}
+
 void P1sCameraClient::task_loop() {
   int64_t last_fetch_us = 0;
 
@@ -487,10 +628,12 @@ void P1sCameraClient::task_loop() {
       refresh_requested_.store(false);
       idle_notified_ = false;
       last_fetch_us = 0;
+      consecutive_connect_failures_ = 0;
     }
 
     const PrinterConnection connection = desired_connection();
-    if (!connection.is_ready()) {
+    const std::string jpeg_url = desired_snapshot_url();
+    if (!connection.is_ready() && jpeg_url.empty()) {
       idle_notified_ = false;
       set_status_snapshot(false, false, false, "Camera not configured");
       vTaskDelay(pdMS_TO_TICKS(5000));
@@ -523,23 +666,16 @@ void P1sCameraClient::task_loop() {
     const bool rtsp_camera = printer_model_has_rtsp_camera(model) || !rtsp_url.empty();
     const bool jpeg_camera =
         !rtsp_camera && (model == PrinterModel::kUnknown || printer_model_has_jpeg_camera(model));
-    if (rtsp_camera) {
+    if (jpeg_url.empty() && rtsp_camera) {
       disconnect();
-
-      std::string detail;
-      if (signature_required) {
-        detail = "Enable Developer Mode for RTSP live view";
-      } else if (rtsp_url.empty()) {
-        detail = "RTSP live view disabled on printer";
-      } else {
-        detail = "RTSP live view not supported yet on this model";
-      }
-
-      set_frame_snapshot(true, true, false, detail.c_str(), nullptr, 0, 0);
+      const char* detail = signature_required
+          ? "Enable printer camera; set JPEG URL in Web Config"
+          : "Set JPEG snapshot URL in Web Config";
+      set_status_snapshot(true, true, false, detail);
       vTaskDelay(pdMS_TO_TICKS(1000));
       continue;
     }
-    if (!jpeg_camera) {
+    if (jpeg_url.empty() && !jpeg_camera) {
       disconnect();
       set_frame_snapshot(true, true, false, "Live camera not available on this model", nullptr, 0,
                          0);
@@ -548,16 +684,27 @@ void P1sCameraClient::task_loop() {
     }
 
     const int64_t now_us = esp_timer_get_time();
-    const bool due = last_fetch_us != 0 && (now_us - last_fetch_us) >= kAutoRefreshIntervalUs;
+    // Only reach this point when the camera page is enabled. Refresh whether
+    // the printer is printing or idle; a tap can still force an early frame.
+    const bool due = last_fetch_us == 0 ||
+                     (now_us - last_fetch_us) >= kAutoRefreshIntervalUs;
     if (!refresh_requested_.exchange(false) && !due) {
       vTaskDelay(pdMS_TO_TICKS(100));
       continue;
     }
 
-    set_status_snapshot(true, true, false, "Loading camera image");
+    // Preserve the last good image during routine polling to avoid flashing a
+    // "Loading" state once per second.
+    if (!has_cached_frame()) {
+      set_status_snapshot(true, true, false, "Loading camera image");
+    }
 
-    const bool ok = fetch_frame_once(connection);
-    last_fetch_us = esp_timer_get_time();
+    // Count from the start of the request, not the end. Network and decode
+    // work can take longer than one second; requests never overlap.
+    last_fetch_us = now_us;
+    const bool ok = jpeg_url.empty()
+        ? fetch_frame_once(connection)
+        : fetch_http_snapshot_once(jpeg_url);
     if (!ok) {
       if (!enabled_.load()) {
         consecutive_connect_failures_ = 0;

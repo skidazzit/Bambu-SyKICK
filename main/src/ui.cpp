@@ -70,8 +70,6 @@ constexpr int kPage2SubnoteWithImageY = 188;
 constexpr int kPage3CameraWidth = 400;
 constexpr int kPage3CameraHeight = 224;
 constexpr int kPage3CameraYOffset = 0;
-constexpr int kPage3NoteWithImageY = 150;
-constexpr int kPage3SubnoteWithImageY = 182;
 // Status text shown above the camera JPEG when an image is loaded.
 // Image is 224 high and centered at y=0, so its top is ~y=-112; the
 // status sits above with comfortable breathing room.
@@ -79,7 +77,7 @@ constexpr int kPage3StatusAboveImageY = -138;
 constexpr int kAuxTempRowY = 28;
 constexpr int kSwipeThresholdPx = 24;
 constexpr int kGestureAxisLockMarginPx = 16;
-constexpr uint32_t kPostPrintScreenHoldMs = 10U * 60U * 1000U;
+constexpr uint32_t kIdlePrinterReturnMs = 5U * 60U * 1000U;
 constexpr int kRotatedVisualOffsetX = 0;
 constexpr int kRotatedVisualOffsetY = 0;
 constexpr uint8_t kRingPulseDepthPercent = 55U;
@@ -357,6 +355,13 @@ void set_clickable(lv_obj_t* obj, bool clickable) {
   } else {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE);
   }
+}
+
+bool supports_chamber_light(const PrinterSnapshot& snapshot) {
+  // Cloud-first P2S setups can know their model before a light report arrives.
+  return snapshot.chamber_light_supported ||
+         printer_model_has_chamber_light(snapshot.local_model) ||
+         printer_model_has_chamber_light(snapshot.cloud_model);
 }
 
 void enable_touch_bubble(lv_obj_t* obj) {
@@ -1122,24 +1127,6 @@ std::string camera_note_text(const PrinterSnapshot& snapshot) {
     return snapshot.camera_detail;
   }
   return "Tap for new image";
-}
-
-std::string camera_subnote_text(const PrinterSnapshot& snapshot) {
-  if (snapshot.camera_blob && !snapshot.camera_blob->empty()) {
-    // Image is loaded: show layer progress below the snapshot so the cam page
-    // carries the print-in-progress info that the dashboard usually owns.
-    if (snapshot.total_layers > 0 || snapshot.current_layer > 0) {
-      return layer_text(snapshot);
-    }
-    if (!snapshot.job_name.empty()) {
-      return snapshot.job_name;
-    }
-    return {};
-  }
-  if (!snapshot.job_name.empty()) {
-    return snapshot.job_name;
-  }
-  return "Auto-refresh every 2s";
 }
 
 const char* mdi_battery_symbol(const PrinterSnapshot& snapshot) {
@@ -2164,7 +2151,6 @@ void Ui::apply_snapshot_locked(const PrinterSnapshot& snapshot, bool force_ring_
   const std::string preview_note = preview_note_text(snapshot);
   const std::string preview_subnote = preview_subnote_text(snapshot);
   const std::string camera_note = camera_note_text(snapshot);
-  const std::string camera_subnote = camera_subnote_text(snapshot);
   bool has_preview_image = false;
   if (snapshot.preview_blob && !snapshot.preview_blob->empty()) {
     const bool preview_blob_changed = last_preview_blob_.get() != snapshot.preview_blob.get();
@@ -2274,33 +2260,40 @@ void Ui::apply_snapshot_locked(const PrinterSnapshot& snapshot, bool force_ring_
   camera_image_visible_ = has_camera_image;
 
   if (camera_text_image_mode_ != has_camera_image) {
-    if (has_camera_image) {
-      // Status note moves above the image; layer/subnote sits below.
-      lv_obj_align(page3_note_, LV_ALIGN_CENTER, 0, kPage3StatusAboveImageY);
-      lv_obj_align(page3_subnote_, LV_ALIGN_CENTER, 0, kPage3NoteWithImageY);
-    } else {
-      lv_obj_align(page3_note_, LV_ALIGN_CENTER, 0, 0);
-      lv_obj_align(page3_subnote_, LV_ALIGN_CENTER, 0, 28);
-    }
+    lv_obj_align(page3_note_, LV_ALIGN_CENTER, 0,
+                 has_camera_image ? kPage3StatusAboveImageY : 0);
     camera_text_image_mode_ = has_camera_image;
   }
   set_hidden(page3_note_, camera_note.empty());
   if (!camera_note.empty()) {
     set_label_text_if_changed(page3_note_, camera_note);
   }
-  set_hidden(page3_subnote_, camera_subnote.empty());
-  if (!camera_subnote.empty()) {
-    // Use the same large font as the main-page layer label when showing
-    // "Layer: X / Y", fall back to the regular small font otherwise.
-    const bool subnote_is_layer =
-        has_camera_image && (snapshot.total_layers > 0 || snapshot.current_layer > 0);
-    lv_obj_set_style_text_font(page3_subnote_,
-                               subnote_is_layer ? &dosis_32 : &lv_font_montserrat_20, 0);
-    set_label_text_if_changed(page3_subnote_, camera_subnote);
+
+  // A large bottom touch target replaces the layer counter on the camera page.
+  // Reuse the existing chamber-light command path and its optimistic state.
+  const int light_state = !supports_chamber_light(snapshot) ? -1
+      : !snapshot.chamber_light_state_known ? 0
+      : (snapshot.chamber_light_on ? 2 : 1);
+  if (page3_last_light_state_ != light_state) {
+    const bool light_on = light_state == 2;
+    const bool supported = light_state >= 0;
+    set_label_text_if_changed(page3_light_button_label_,
+                              !supported ? "LIGHT N/A"
+                                         : light_state == 0 ? "LIGHT"
+                                         : light_on ? "LIGHT ON" : "LIGHT OFF");
+    lv_obj_set_style_bg_color(page3_light_button_,
+                              lv_color_hex(light_on ? 0x654511 : 0x182A35), 0);
+    lv_obj_set_style_border_color(page3_light_button_,
+                                  lv_color_hex(light_on ? 0xF0AC42
+                                                        : supported ? 0x58718A : 0x34404B), 0);
+    lv_obj_set_style_text_color(page3_light_button_label_,
+                                lv_color_hex(supported ? 0xFFFFFF : 0x788999), 0);
+    set_clickable(page3_light_button_, supported);
+    page3_last_light_state_ = light_state;
   }
 
   show_logo_ = should_show_logo(snapshot);
-  const bool chamber_light_clickable = snapshot.chamber_light_supported;
+  const bool chamber_light_clickable = supports_chamber_light(snapshot);
   if (logo_clickable_ != chamber_light_clickable) {
     set_clickable(logo_badge_, chamber_light_clickable);
     logo_clickable_ = chamber_light_clickable;
@@ -3277,16 +3270,24 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_align(page3_note_, LV_ALIGN_CENTER, 0, 0);
   enable_touch_bubble(page3_note_);
 
-  page3_subnote_ = lv_label_create(page3_);
-  set_label_text_if_changed(page3_subnote_, "Auto-refresh every 2s");
-  lv_obj_set_width(page3_subnote_, 320);
-  lv_label_set_long_mode(page3_subnote_, LV_LABEL_LONG_WRAP);
-  lv_obj_set_style_text_align(page3_subnote_, LV_TEXT_ALIGN_CENTER, 0);
-  lv_obj_set_style_text_font(page3_subnote_, info20, 0);
-  lv_obj_set_style_text_color(page3_subnote_, lv_color_hex(0x888888), 0);
-  lv_obj_align(page3_subnote_, LV_ALIGN_CENTER, 0, 28);
-  lv_obj_add_flag(page3_subnote_, LV_OBJ_FLAG_HIDDEN);
-  enable_touch_bubble(page3_subnote_);
+  page3_light_button_ = lv_button_create(page3_);
+  lv_obj_set_size(page3_light_button_, 190, 52);
+  lv_obj_align(page3_light_button_, LV_ALIGN_CENTER, 0, 155);
+  lv_obj_set_style_bg_color(page3_light_button_, lv_color_hex(0x182A35), 0);
+  lv_obj_set_style_bg_opa(page3_light_button_, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_color(page3_light_button_, lv_color_hex(0x58718A), 0);
+  lv_obj_set_style_border_width(page3_light_button_, 2, 0);
+  lv_obj_set_style_radius(page3_light_button_, 26, 0);
+  lv_obj_set_style_shadow_width(page3_light_button_, 0, 0);
+  lv_obj_set_style_pad_all(page3_light_button_, 0, 0);
+  lv_obj_clear_flag(page3_light_button_, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_event_cb(page3_light_button_, &Ui::camera_light_button_event_cb,
+                      LV_EVENT_CLICKED, this);
+  page3_light_button_label_ = lv_label_create(page3_light_button_);
+  set_label_text_if_changed(page3_light_button_label_, "LIGHT");
+  lv_obj_set_style_text_font(page3_light_button_label_, info20, 0);
+  lv_obj_set_style_text_color(page3_light_button_label_, lv_color_hex(0xFFFFFF), 0);
+  lv_obj_center(page3_light_button_label_);
 
   // Home face is a separate overlay. The printer pager remains fully intact.
   face_home_ = lv_obj_create(screen_);
@@ -3346,6 +3347,7 @@ esp_err_t Ui::build_dashboard() {
 
 void Ui::show_faces_home_locked() {
   if (face_home_ == nullptr) return;
+  idle_printer_timer_active_ = false;
   lv_obj_clear_flag(face_home_, LV_OBJ_FLAG_HIDDEN);
   if (face_renderer_) face_renderer_->SetVisible(true);
   face_home_visible_ = true;
@@ -3369,6 +3371,11 @@ void Ui::show_printer_home_locked() {
   if (active_page_ != kPageIdxMain) {
     set_active_page(kPageIdxMain);
   }
+  // Manual opening while idle also gets a five-minute return to Faces.
+  if (!auto_print_running_) {
+    idle_printer_timer_active_ = true;
+    idle_printer_since_ms_ = lv_tick_get();
+  }
   note_activity(true);
 }
 
@@ -3384,30 +3391,33 @@ void Ui::update_print_screen_focus_locked(const PrinterSnapshot& snapshot) {
   const uint32_t now_ms = lv_tick_get();
 
   if (job_running) {
-    // Only switch pages at the start of a new job. Manual upward swipes
-    // still work without snapping back every status update.
+    // A real print takes priority over the idle timeout, even when paused.
+    // Only open the dashboard at the start of a new job; manual swipes work.
+    idle_printer_timer_active_ = false;
     if (!auto_print_running_) {
       auto_print_running_ = true;
-      auto_print_return_pending_ = false;
       show_printer_home_locked();
     }
   } else if (auto_print_running_ &&
              (finished_or_failed || lifecycle == PrintLifecycleState::kIdle)) {
-    // Finished, failed, or stopped: keep showing the result for 10 minutes.
+    // Keep the result visible for five minutes after a job ends or fails.
     auto_print_running_ = false;
-    auto_print_return_pending_ = true;
-    auto_print_finished_at_ms_ = now_ms;
+    if (!face_home_visible_) {
+      idle_printer_timer_active_ = true;
+      idle_printer_since_ms_ = now_ms;
+    }
   }
 
-  if (auto_print_return_pending_ && !auto_print_running_ &&
-      static_cast<uint32_t>(now_ms - auto_print_finished_at_ms_) >=
-          kPostPrintScreenHoldMs) {
-    auto_print_return_pending_ = false;
+  // Also applies when the printer app is opened by hand with no job running.
+  // Touching or viewing the camera does not restart this idle countdown.
+  if (idle_printer_timer_active_ && !auto_print_running_ && !face_home_visible_ &&
+      static_cast<uint32_t>(now_ms - idle_printer_since_ms_) >=
+          kIdlePrinterReturnMs) {
     show_faces_home_locked();
   }
 
   print_screen_hold_active_.store(
-      auto_print_running_ || auto_print_return_pending_,
+      auto_print_running_ || (idle_printer_timer_active_ && !face_home_visible_),
       std::memory_order_relaxed);
 }
 
@@ -3907,7 +3917,7 @@ void Ui::handle_logo_event(lv_event_t* event) {
     return;
   }
 
-  if (scrolling_ || !show_logo_ || !last_snapshot_.chamber_light_supported) {
+  if (scrolling_ || !show_logo_ || !supports_chamber_light(last_snapshot_)) {
     return;
   }
 
@@ -4301,7 +4311,7 @@ void Ui::open_v13_menu(int page) {
       lv_obj_add_event_cb(card, callback, LV_EVENT_CLICKED, this);
     };
     constexpr const char* kNames[] = {
-        "Face Options", "Display", "Wi-Fi", "Clock", "Sound", "Faces Home"
+        "Face Options", "Display", "Wi-Fi", "Clock", "Sound"
     };
     for (size_t position = 0; position < v13_preferences_.menu_order.size(); ++position) {
       const uint8_t id = v13_preferences_.menu_order[position];
@@ -4321,17 +4331,12 @@ void Ui::open_v13_menu(int page) {
         case 4: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
           static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(7);
         }); break;
-        case 5: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
-          auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
-          ui->close_v13_menu();
-          ui->show_faces_home_locked();
-        }); break;
       }
     }
-    nav_card("Sort Menu", 6, [](lv_event_t* e) {
+    nav_card("Sort Menu", 5, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(8);
     });
-    nav_card("About", 7, [](lv_event_t* e) {
+    nav_card("About", 6, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
     });
     // Two fixed touch targets in the round-safe footer.
@@ -4358,9 +4363,9 @@ void Ui::open_v13_menu(int page) {
   } else if (safe_page == 8) {
     // Focused sort: a round-screen-safe scrolling list with 52px arrow targets.
     lv_obj_remove_flag(v13_menu_, LV_OBJ_FLAG_SCROLLABLE);
-    v13_sort_selected_ = std::min<uint8_t>(v13_sort_selected_, 5);
+    v13_sort_selected_ = std::min<uint8_t>(v13_sort_selected_, 4);
     constexpr const char* kSortNames[] = {
-        "Face Options", "Display", "Wi-Fi", "Clock", "Sound", "Faces Home"
+        "Face Options", "Display", "Wi-Fi", "Clock", "Sound"
     };
     lv_obj_t* sort_list = lv_obj_create(v13_menu_);
     lv_obj_set_size(sort_list, 338, 266);
@@ -4461,7 +4466,7 @@ void Ui::open_v13_menu(int page) {
     };
     footer("Reset", -73, [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
-      ui->v13_preferences_.menu_order = {{0, 1, 2, 3, 4, 5}};
+      ui->v13_preferences_.menu_order = {{0, 1, 2, 3, 4}};
       ui->v13_sort_selected_ = 0;
       save_v13_menu_preferences(ui->v13_preferences_);
       ui->open_v13_menu(8);
@@ -4652,6 +4657,22 @@ void Ui::screen_event_cb(lv_event_t* event) {
   if (ui != nullptr) {
     ui->handle_screen_event(event);
   }
+}
+
+void Ui::camera_light_button_event_cb(lv_event_t* event) {
+  auto* ui = static_cast<Ui*>(lv_event_get_user_data(event));
+  if (ui == nullptr || lv_event_get_code(event) != LV_EVENT_CLICKED) {
+    return;
+  }
+  const bool ready = !ui->scrolling_ && ui->active_page_ == kPageIdxCamera &&
+                     supports_chamber_light(ui->last_snapshot_);
+  ESP_LOGI(kTag, "Camera light button tapped (ready=%d page=%d)",
+           ready, ui->active_page_);
+  if (!ready) {
+    return;
+  }
+  ui->note_activity(false);
+  ui->chamber_light_toggle_requested_.store(true);
 }
 
 void Ui::logo_event_cb(lv_event_t* event) {

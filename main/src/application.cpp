@@ -91,13 +91,15 @@ bool hybrid_local_status_supported(const PrinterSnapshot& local_snapshot,
 
 bool route_allows_local_jpeg_camera(SourceMode source_mode,
                                     const PrinterSnapshot& local_snapshot,
-                                    const BambuCloudSnapshot& cloud_snapshot) {
+                                    const BambuCloudSnapshot& cloud_snapshot,
+                                    bool snapshot_bridge_configured) {
   if (source_mode == SourceMode::kCloudOnly) {
     return false;
   }
 
+  if (snapshot_bridge_configured) return true;
   const PrinterModel model = preferred_model_for_routing(local_snapshot, cloud_snapshot);
-  if (printer_model_has_jpeg_camera(model)) {
+  if (printer_model_has_jpeg_camera(model) || printer_model_has_rtsp_camera(model)) {
     return true;
   }
   if (model != PrinterModel::kUnknown) {
@@ -116,8 +118,6 @@ struct ChamberLightCommandPlan {
 };
 
 ChamberLightCommandPlan chamber_light_command_plan(SourceMode source_mode,
-                                                   bool hybrid_prefers_cloud,
-                                                   bool hybrid_local_status_supported_now,
                                                    bool local_network_ready,
                                                    bool local_printer_enabled,
                                                    bool cloud_network_ready,
@@ -133,14 +133,12 @@ ChamberLightCommandPlan chamber_light_command_plan(SourceMode source_mode,
       break;
     case SourceMode::kHybrid:
     default:
-      plan.try_local =
-          !hybrid_prefers_cloud && hybrid_local_status_supported_now && local_network_ready &&
-          local_printer_enabled &&
-          (local_snapshot.local_connected ||
-           printer_model_has_chamber_light(local_snapshot.local_model));
-      plan.try_cloud =
-          cloud_network_ready &&
-          (cloud_snapshot.connected || printer_model_has_chamber_light(cloud_snapshot.model));
+      // Cloud status preference must not block LAN control commands. The P2S
+      // can report via cloud while its local MQTT command path remains ready.
+      // Try LAN first when connected, then fall back to cloud if unavailable.
+      plan.try_local = local_network_ready && local_printer_enabled &&
+                       local_snapshot.local_connected;
+      plan.try_cloud = cloud_network_ready && cloud_snapshot.connected;
       break;
   }
   return plan;
@@ -337,6 +335,7 @@ void Application::run() {
   printer_client_.configure(printer_connection);
   ESP_ERROR_CHECK(printer_client_.start());
   camera_client_.configure(printer_connection);
+  camera_client_.set_snapshot_url(config_store_.load_camera_snapshot_url());
   ESP_ERROR_CHECK(camera_client_.start());
 
   ESP_LOGI(kTag, "Bootstrap complete");
@@ -414,8 +413,10 @@ void Application::run() {
         hybrid_local_status_supported(local_snapshot, cloud_snapshot);
     const PrinterModel routing_model = preferred_model_for_routing(local_snapshot, cloud_snapshot);
     const bool routing_model_has_jpeg_camera = printer_model_has_jpeg_camera(routing_model);
-    const bool camera_model_has_jpeg =
-        route_allows_local_jpeg_camera(source_mode_, local_snapshot, cloud_snapshot);
+    const bool snapshot_bridge_configured = camera_client_.has_snapshot_url();
+    const bool camera_route_available =
+        route_allows_local_jpeg_camera(source_mode_, local_snapshot, cloud_snapshot,
+                                      snapshot_bridge_configured);
     const bool hybrid_camera_cooldown_active =
         source_mode_ == SourceMode::kHybrid &&
         tick_deadline_active(hybrid_camera_cooldown_deadline_, now_tick);
@@ -466,7 +467,11 @@ void Application::run() {
         local_network_ready &&
         (source_mode_ == SourceMode::kLocalOnly || hybrid_local_camera_demand);
     printer_client_.set_network_ready(local_network_ready);
-    camera_client_.set_network_ready(local_camera_network_ready);
+    // A JPEG bridge only needs Wi-Fi; native Bambu JPEG also needs local MQTT.
+    camera_client_.set_network_ready(snapshot_bridge_configured
+        ? wifi_connected
+        : (local_camera_network_ready ||
+           (wifi_connected && printer_model_has_rtsp_camera(routing_model))));
 
     local_snapshot.wifi_connected = wifi_connected;
     local_snapshot.wifi_ip = wifi_ip;
@@ -484,11 +489,15 @@ void Application::run() {
         local_snapshot.non_error_stop && tick_deadline_active(stop_banner_until_tick_, now_tick);
     resolve_ui_state(local_snapshot);
 
+    const bool native_camera_ready =
+        local_printer_enabled_ && local_camera_network_ready &&
+        routing_model_has_jpeg_camera && local_snapshot.local_connected &&
+        !local_mqtt_handoff_active;
     const bool camera_enabled =
-        source_mode_ != SourceMode::kCloudOnly && local_printer_enabled_ &&
-        local_camera_network_ready &&
-        camera_model_has_jpeg && local_snapshot.local_connected && !local_mqtt_handoff_active &&
-        camera_page_active &&
+        source_mode_ != SourceMode::kCloudOnly && wifi_connected &&
+        camera_route_available && camera_page_active &&
+        (snapshot_bridge_configured || native_camera_ready ||
+         printer_model_has_rtsp_camera(routing_model)) &&
         ui_.screen_power_mode() != ScreenPowerMode::kOff;
     camera_client_.set_enabled(camera_enabled);
     if (ui_.consume_camera_refresh_request()) {
@@ -547,7 +556,8 @@ void Application::run() {
       merged.preview_page_available = source_mode_ != SourceMode::kLocalOnly;
       merged.camera_page_available =
           route_allows_local_jpeg_camera(source_mode_, current_local_snapshot,
-                                         current_cloud_snapshot);
+                                         current_cloud_snapshot,
+                                         snapshot_bridge_configured);
       return merged;
     };
     auto apply_chamber_light_override = [&](PrinterSnapshot* target_snapshot) {
@@ -592,20 +602,23 @@ void Application::run() {
           !snapshot.chamber_light_state_known || !snapshot.chamber_light_on;
       bool command_sent = false;
       const ChamberLightCommandPlan light_plan =
-          chamber_light_command_plan(source_mode_, hybrid_prefers_cloud,
-                                     hybrid_local_status_supported_now, local_network_ready,
+          chamber_light_command_plan(source_mode_, local_network_ready,
                                      local_printer_enabled_, cloud_network_ready,
                                      local_snapshot, cloud_snapshot);
+      ESP_LOGI(kTag, "Camera light toggle: target=%s local=%d cloud=%d",
+               requested_on ? "on" : "off", light_plan.try_local, light_plan.try_cloud);
 
       if (light_plan.try_local) {
         command_sent = printer_client_.set_chamber_light(requested_on);
         if (command_sent) {
+          ESP_LOGI(kTag, "Chamber light command queued on LAN");
           mark_chamber_light_state(local_snapshot, requested_on);
         }
       }
       if (!command_sent && light_plan.try_cloud) {
         command_sent = cloud_client_.set_chamber_light(requested_on);
         if (command_sent) {
+          ESP_LOGI(kTag, "Chamber light command queued on cloud");
           mark_chamber_light_state(cloud_snapshot, requested_on);
         }
       }
@@ -659,7 +672,8 @@ void Application::run() {
     }
 
     const P1sCameraSnapshot camera_snapshot = camera_client_.snapshot();
-    if (source_mode_ == SourceMode::kCloudOnly || !local_printer_enabled_ ||
+    if (source_mode_ == SourceMode::kCloudOnly ||
+        (!local_printer_enabled_ && !snapshot_bridge_configured) ||
         !snapshot.camera_page_available) {
       snapshot.camera_connected = false;
       if (source_mode_ == SourceMode::kCloudOnly) {
@@ -754,8 +768,8 @@ void Application::run() {
     const bool provisioning_active =
         snapshot.setup_ap_active ||
         snapshot.connection == PrinterConnectionState::kWaitingForCredentials;
-    // Keep the printer screen lit during a job and for 10 minutes after
-    // completion or failure. Normal dimming resumes on Faces Home.
+    // Keep the printer screen lit during a job and during the five-minute
+    // no-print timeout. Normal dimming resumes on Faces Home.
     const bool keep_screen_awake =
         provisioning_active || camera_page_active || page_transition_active ||
         ui_.print_screen_hold_active();

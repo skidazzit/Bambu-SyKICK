@@ -132,6 +132,8 @@ class ConfigStore {
   // IANA timezone name (e.g. "Europe/Berlin"). Empty when never configured;
   // callers should fall back to a sensible default (handled in time_sync).
   std::string load_timezone_iana() const;
+  // HTTP JPEG snapshot bridge (go2rtc) for RTSP-only printers such as P2S.
+  std::string load_camera_snapshot_url() const;
 
   esp_err_t save_wifi_credentials(const WifiCredentials& credentials) const;
   esp_err_t save_cloud_credentials(const BambuCloudCredentials& credentials) const;
@@ -145,6 +147,7 @@ class ConfigStore {
   esp_err_t save_audio_enabled(bool enabled) const;
   esp_err_t save_audio_volume_percent(int volume) const;
   esp_err_t save_timezone_iana(const std::string& iana_name) const;
+  esp_err_t save_camera_snapshot_url(const std::string& url) const;
   std::vector<PrinterProfile> load_printer_profiles() const;
   esp_err_t save_printer_profile(const PrinterProfile& profile) const;
   esp_err_t delete_printer_profile(uint8_t index) const;

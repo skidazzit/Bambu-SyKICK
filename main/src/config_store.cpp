@@ -376,6 +376,14 @@ esp_err_t ConfigStore::save_timezone_iana(const std::string& iana_name) const {
   return save_string("tz_iana", iana_name);
 }
 
+std::string ConfigStore::load_camera_snapshot_url() const {
+  return load_string("cam_snap_url");
+}
+
+esp_err_t ConfigStore::save_camera_snapshot_url(const std::string& url) const {
+  return save_string("cam_snap_url", url);
+}
+
 esp_err_t ConfigStore::save_arc_color_scheme(const ArcColorScheme& colors) const {
   ESP_RETURN_ON_ERROR(save_string("arc_print", color_to_html_hex(colors.printing)), kTag,
                       "save printing color failed");
