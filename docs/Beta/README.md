@@ -1,6 +1,6 @@
 # Bambu SyKICK 1.75 AMOLED beta validation (historical)
 
-> This document records an earlier beta image. The current 1.75 AMOLED stable release is [v1.7.0](../../release/RELEASE_NOTES_v1.7.0.md). The test artifact and safety notes below apply only to that older beta.
+> This document records an earlier beta image. The current 1.75 AMOLED stable release is [v1.7.1](../../release/RELEASE_NOTES_v1.7.1.md). The test artifact and safety notes below apply only to that older beta.
 
 Build: `v1.6.2-sykick-beta.1`  
 Target: Waveshare ESP32-S3 Touch AMOLED 1.75 (not the 2.8-inch LCD)  
