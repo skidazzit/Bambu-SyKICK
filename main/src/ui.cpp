@@ -1112,10 +1112,8 @@ std::string preview_subnote_text(const PrinterSnapshot& snapshot) {
 
 std::string camera_note_text(const PrinterSnapshot& snapshot) {
   if (snapshot.camera_blob && !snapshot.camera_blob->empty()) {
-    // The camera header shares its position with the global battery overlay.
-    // Prefer the battery state whenever a battery is installed (including
-    // charging); on USB-only power the header instead shows the print status.
-    return (snapshot.battery_present || snapshot.charging) ? std::string{} : lifecycle_label(snapshot);
+    // No global battery badge: keep the camera's print status visible.
+    return lifecycle_label(snapshot);
   }
   if (snapshot.connection == PrinterConnectionState::kWaitingForCredentials) {
     return "Set up printer";
@@ -1567,7 +1565,7 @@ void Ui::apply_page0_parallax(bool force) {
     lv_obj_set_style_opa(page0_empty_note_, page0_opa, 0);
   }
 
-  // Overlay (arc, progress, battery): fade in as we leave page 0
+  // Overlay (arc and progress): fade in as we leave page 0
   const lv_opa_t overlay_opa = static_cast<lv_opa_t>(255 * clamped / page_w);
 
   // fixed_overlay_ contains the full-screen arc (466×466 px).  Setting opa to any
@@ -1586,8 +1584,6 @@ void Ui::apply_page0_parallax(bool force) {
   // Small text labels: opa fade is cheap (entire label fits in the 24 KB layer buffer
   // in a single pass), so the visual cross-fade is worth keeping.
   lv_obj_set_style_opa(progress_label_, overlay_opa, 0);
-  lv_obj_set_style_opa(battery_icon_label_, overlay_opa, 0);
-  lv_obj_set_style_opa(battery_pct_label_, overlay_opa, 0);
 }
 
 void Ui::update_printer_cards(const std::vector<PrinterCardInfo>& cards) {
@@ -2961,6 +2957,7 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_move_foreground(progress_label_);
 
   battery_icon_label_ = lv_label_create(lv_layer_top());
+  lv_obj_add_flag(battery_icon_label_, LV_OBJ_FLAG_HIDDEN);
   set_label_text_if_changed(battery_icon_label_, kMdiBattery100);
   lv_obj_set_style_text_font(battery_icon_label_, mdi30, 0);
   lv_obj_set_style_text_color(battery_icon_label_, lv_color_hex(0xFFFFFF), 0);
@@ -2969,6 +2966,7 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_move_foreground(battery_icon_label_);
 
   battery_pct_label_ = lv_label_create(lv_layer_top());
+  lv_obj_add_flag(battery_pct_label_, LV_OBJ_FLAG_HIDDEN);
   set_label_text_if_changed(battery_pct_label_, "--%");
   lv_obj_set_style_text_font(battery_pct_label_, dosis20, 0);
   lv_obj_set_style_text_color(battery_pct_label_, lv_color_hex(0xFFFFFF), 0);
@@ -3433,13 +3431,10 @@ void Ui::apply_page_visibility() {
   const bool on_page2 = !scrolling_ ? (active_page_ == kPageIdxPreview) : true;
   const bool on_page3 = !scrolling_ ? (active_page_ == kPageIdxCamera) : true;
   const bool settled_page1 = !scrolling_ && active_page_ == kPageIdxMain;
-  // These labels live on lv_layer_top(), so the pager cannot clip them.  The
-  // camera header uses the same position: on battery power (including while
-  // charging) show the battery indicator there; on USB-only power show the
-  // camera page's print status instead.
-  const bool show_battery_overlay =
-      (last_snapshot_.battery_present || last_snapshot_.charging) &&
-      (settled_page1 || (!scrolling_ && active_page_ == kPageIdxCamera));
+  // Keep the old battery labels hidden on every page. They live in
+  // lv_layer_top(), so leaving their visibility tied to the active page
+  // would put the battery percentage over Faces, Camera, and Control Center.
+  // Battery telemetry and the brief USB charging animation still work.
   const bool portal_hint_has_priority = portal_pin_active_ || portal_session_active_;
   const bool show_portal_hint =
       settled_page1 && !portal_hint_text_.empty() &&
@@ -3455,8 +3450,8 @@ void Ui::apply_page_visibility() {
   set_hidden(status_label_, !on_page1);
   set_hidden(detail_label_, !on_page1 || !detail_visible_ || show_portal_hint);
   set_hidden(layer_row_, !on_page1);
-  set_hidden(battery_icon_label_, !show_battery_overlay);
-  set_hidden(battery_pct_label_, !show_battery_overlay);
+  set_hidden(battery_icon_label_, true);
+  set_hidden(battery_pct_label_, true);
   set_hidden(nozzle_prefix_label_, !on_page1);
   set_hidden(nozzle_value_label_, !on_page1);
   set_hidden(nozzle_aux_label_, !on_page1 || !nozzle_aux_visible_);
