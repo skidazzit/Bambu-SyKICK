@@ -3342,9 +3342,10 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_add_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN);
   lv_obj_move_foreground(v13_menu_);
 
-  // Keep the PWR panel on LVGL's top layer. Faces, the printer, and all
-  // settings menus can reorder normal screen objects without covering it.
-  power_menu_ = lv_obj_create(lv_display_get_layer_top(display_));
+  // Use an independent LVGL screen, not an overlay. The animated Faces
+  // renderer invalidates the dashboard every 50 ms and may block an overlay
+  // from appearing. A screen switch stops drawing Faces while Power is open.
+  power_menu_ = lv_obj_create(nullptr);
   lv_obj_set_size(power_menu_, board::kDisplayWidth, board::kDisplayHeight);
   lv_obj_center(power_menu_);
   lv_obj_set_style_bg_color(power_menu_, lv_color_hex(0x080F16), 0);
@@ -3395,8 +3396,7 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_set_style_text_font(power_hint, &lv_font_montserrat_18, 0);
   lv_obj_set_style_text_color(power_hint, lv_color_hex(0xA5C9D3), 0);
   lv_obj_align(power_hint, LV_ALIGN_TOP_MID, 0, 351);
-  lv_obj_add_flag(power_menu_, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_move_foreground(power_menu_);
+  // Inactive until a physical PWR hold selects this screen.
 
   lv_obj_add_event_cb(screen_, &Ui::screen_event_cb, LV_EVENT_ALL, this);
   lv_obj_update_layout(pager_);
@@ -3429,10 +3429,10 @@ bool Ui::open_power_menu() {
   power_touch_active_ = false;
   power_touch_swiped_ = false;
   lv_label_set_text(power_menu_status_, "Choose an action");
-  lv_obj_clear_flag(power_menu_, LV_OBJ_FLAG_HIDDEN);
-  lv_obj_move_foreground(power_menu_);
   power_menu_active_.store(true);
-  ESP_LOGI(kTag, "Power menu displayed");
+  lv_screen_load(power_menu_);
+  ESP_LOGI(kTag, "Power menu displayed (previous=%s)",
+           face_home_visible_ ? "Faces" : "Bambu/menu");
   return true;
 }
 
@@ -3441,7 +3441,6 @@ void Ui::show_power_off_failure() {
   LvglLockGuard lock(500, "power_off_failure");
   if (!lock.locked()) return;
   lv_label_set_text(power_menu_status_, "Power remains on (USB?)");
-  lv_obj_move_foreground(power_menu_);
 }
 
 void Ui::queue_power_action_locked(DevicePowerAction action) {
@@ -3453,8 +3452,9 @@ void Ui::queue_power_action_locked(DevicePowerAction action) {
 
 void Ui::close_power_menu_locked() {
   power_touch_active_ = false;
+  // Restore the existing dashboard tree; it remembers the exact open page.
+  if (screen_ != nullptr) lv_screen_load(screen_);
   power_menu_active_.store(false);
-  if (power_menu_ != nullptr) lv_obj_add_flag(power_menu_, LV_OBJ_FLAG_HIDDEN);
 }
 
 void Ui::power_menu_event_cb(lv_event_t* event) {
@@ -4302,9 +4302,7 @@ void Ui::v13_face_timer_cb(lv_timer_t* timer) {
 }
 
 void Ui::update_v13_face_tick() {
-  if (power_menu_active_.load(std::memory_order_relaxed) && power_menu_ != nullptr) {
-    lv_obj_move_foreground(power_menu_);
-  }
+  // Power has its own LVGL screen, so no z-order changes are needed here.
   // Close an untouched settings menu after 60 seconds. The LVGL display
   // tracks even brief taps and swipes on nested controls, so every menu
   // page resets the timeout without adding handlers to each button.
