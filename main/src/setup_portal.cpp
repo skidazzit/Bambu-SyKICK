@@ -4,6 +4,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
+#include <sys/time.h>
 #include <memory>
 #include <string>
 #include <vector>
@@ -2100,7 +2102,7 @@ esp_err_t SetupPortal::handle_root(httpd_req_t* request) {
       const std::string tz_badge_value = saved_tz.empty() ? "Auto" : saved_tz;
       begin_settings_panel(
           "Time Zone",
-          "Local time used for the on-screen ETA. Auto-detected from your browser when unset.",
+          "Sets the ESP clock and local time zone. Wi-Fi also syncs time when available.",
           tz_badge_value, "info", false);
       html += "<div class=\"field\"><label for=\"tz_iana\">Time Zone (IANA)</label><select id=\"tz_iana\">";
       html += "<option value=\"\"";
@@ -2120,7 +2122,7 @@ esp_err_t SetupPortal::handle_root(httpd_req_t* request) {
         html += "</option>";
       }
       html += "</select></div>";
-      html += "<div class=\"actions\"><button type=\"button\" class=\"primary hidden\" id=\"tz-apply-button\">Apply</button>";
+      html += "<div class=\"actions\"><button type=\"button\" class=\"primary\" id=\"tz-apply-button\">Sync Clock Now</button>";
       html += "<div class=\"micro\" id=\"tz-detected-hint\"></div></div>";
       end_settings_panel();
     }
@@ -2836,8 +2838,8 @@ esp_err_t SetupPortal::handle_root(httpd_req_t* request) {
               "updateAmsDisplayControls();setStatus('Saved. Restarting ESP...','The connection will drop briefly during reboot.',30000);}"
           "else{setStatus(body.error||'AMS display change failed',body.detail||'The AMS display settings could not be saved.',8000);amsDisplayApplyButton.disabled=false;updateAmsDisplayControls();}}"
           "catch(error){setStatus('AMS display change failed','The request to the ESP could not be completed.',8000);amsDisplayApplyButton.disabled=false;updateAmsDisplayControls();}});}";
-  // Time zone panel: pre-fill the dropdown from the browser when no value is
-  // saved yet, then enable the Apply button only after the user changes it.
+  // The web clock always offers a browser-time sync, even if the zone is unchanged.
+  // Its timestamp is only accepted over the existing authenticated timezone route.
   html += "{const tzSelect=document.getElementById('tz_iana');"
           "const tzApply=document.getElementById('tz-apply-button');"
           "const tzHint=document.getElementById('tz-detected-hint');"
@@ -2845,17 +2847,18 @@ esp_err_t SetupPortal::handle_root(httpd_req_t* request) {
           "function tzInitialPick(){if(!tzSelect)return '';const saved=savedConfig.tz_iana||'';if(saved)return saved;"
           "if(tzBrowser){for(const o of tzSelect.options){if(o.value===tzBrowser)return tzBrowser;}}return '';}"
           "function tzUpdateControls(){if(!tzSelect||!tzApply)return;const cur=tzSelect.value;const saved=savedConfig.tz_iana||'';"
-          "if(cur!==saved){tzApply.classList.remove('hidden');tzApply.disabled=false;}else{tzApply.classList.add('hidden');}}"
+          "tzApply.textContent=cur!==saved?'Save Zone & Sync Clock':'Sync Clock Now';}"
           "if(tzSelect){const pick=tzInitialPick();if(pick&&!savedConfig.tz_iana){tzSelect.value=pick;}"
-          "if(tzHint){if(tzBrowser){tzHint.textContent='Browser detected: '+tzBrowser+(savedConfig.tz_iana?'':' (pre-selected)');}else{tzHint.textContent='Browser timezone could not be detected.';}}"
+          "if(tzHint){if(tzBrowser){tzHint.textContent='Browser zone: '+tzBrowser+(savedConfig.tz_iana?'':' (select Sync to save)');}else{tzHint.textContent='Choose a zone, then press Sync Clock.';}}"
           "tzSelect.addEventListener('change',tzUpdateControls);tzUpdateControls();}"
           "if(tzApply){tzApply.addEventListener('click',async()=>{const tz_iana=tzSelect?tzSelect.value:'';"
-          "tzApply.disabled=true;setStatus('Applying time zone...','Saving and switching local time now (no reboot).',8000);"
-          "try{const response=await fetch('/api/timezone',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tz_iana})});"
+          "tzApply.disabled=true;setStatus('Syncing clock...','Saving time zone and browser time now (no reboot).',8000);"
+          "try{const response=await fetch('/api/timezone',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tz_iana,client_epoch_ms:Date.now()})});"
           "const body=await response.json().catch(()=>({}));"
-          "if(response.ok){savedConfig.tz_iana=tz_iana;tzUpdateControls();setStatus('Time zone saved.','Local time is now '+(tz_iana||'UTC')+'.',4000);}"
-          "else{setStatus(body.error||'Time zone change failed','The new time zone could not be saved.',6000);tzApply.disabled=false;tzUpdateControls();}}"
-          "catch(error){setStatus('Time zone change failed','The request to the ESP could not be completed.',6000);tzApply.disabled=false;tzUpdateControls();}});}}";
+          "if(response.ok){savedConfig.tz_iana=tz_iana;setStatus('Clock synced.','The ESP clock now uses '+(tz_iana||'UTC')+' and your browser time.',4000);}"
+          "else{setStatus(body.error||'Clock sync failed','Check the time zone and try again.',6000);}}"
+          "catch(error){setStatus('Clock sync failed','The request to the ESP could not be completed.',6000);}"
+          "finally{tzApply.disabled=false;tzUpdateControls();}});}}";
   // Sound notifications panel: enable/volume save + live test button. Applies
   // without restart so the button feedback is immediate.
   html += "{const audioEnabledSel=document.getElementById('audio_enabled');"
@@ -3494,6 +3497,17 @@ esp_err_t SetupPortal::handle_config_get(httpd_req_t* request) {
   body += ",\"audio_volume\":";
   body += std::to_string(portal->config_store_.load_audio_volume_percent());
   body += ",\"tz_iana\":\"" + json_escape(portal->config_store_.load_timezone_iana()) + "\"";
+  const time_t clock_now = time(nullptr);
+  body += ",\"clock_epoch\":" + std::to_string(static_cast<long long>(clock_now));
+  body += ",\"clock_valid\":";
+  body += clock_now > 1704067200 ? "true" : "false";
+  if (clock_now > 1704067200) {
+    struct tm local_clock{};
+    localtime_r(&clock_now, &local_clock);
+    char local_time_string[48] = {};
+    strftime(local_time_string, sizeof(local_time_string), "%Y-%m-%d %H:%M:%S %Z", &local_clock);
+    body += ",\"clock_local\":\"" + json_escape(local_time_string) + "\"";
+  }
   body += "}";
 
   send_json(request, body);
@@ -3915,9 +3929,21 @@ esp_err_t SetupPortal::handle_timezone_post(httpd_req_t* request) {
     return parse_err;
   }
   std::string tz_iana = trim_copy(read_string_field(root, "tz_iana"));
+  const cJSON* client_epoch = cJSON_GetObjectItemCaseSensitive(root, "client_epoch_ms");
+  // The browser can supply UTC wall time when NTP is blocked or slow.
+  // Validate this strictly: do not accept a bad timestamp from a client.
+  int64_t client_epoch_ms = 0;
+  if (cJSON_IsNumber(client_epoch)) {
+    const double reported = client_epoch->valuedouble;
+    if (reported < 1704067200000.0 || reported >= 4102444800000.0) {
+      cJSON_Delete(root);
+      return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "invalid browser time");
+    }
+    client_epoch_ms = static_cast<int64_t>(reported);
+  }
   cJSON_Delete(root);
 
-  // Validate against the curated list. Empty value is allowed (clears to UTC).
+  // Validate against the curated list. Empty value is allowed (UTC).
   if (!tz_iana.empty() && time_sync::iana_to_posix(tz_iana).empty()) {
     return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "unsupported timezone");
   }
@@ -3925,8 +3951,17 @@ esp_err_t SetupPortal::handle_timezone_post(httpd_req_t* request) {
   ESP_LOGI(kTag, "Saving timezone: '%s'", tz_iana.c_str());
   ESP_RETURN_ON_ERROR(portal->config_store_.save_timezone_iana(tz_iana), kTag,
                       "save timezone failed");
-  // Apply immediately — no reboot required for localtime_r() consumers.
   time_sync::set_timezone_iana(tz_iana);
+  if (client_epoch_ms != 0) {
+    const struct timeval tv = {
+        static_cast<time_t>(client_epoch_ms / 1000),
+        static_cast<suseconds_t>((client_epoch_ms % 1000) * 1000)};
+    if (settimeofday(&tv, nullptr) != 0) {
+      ESP_LOGW(kTag, "Could not set clock from browser; waiting for SNTP");
+      return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "clock sync failed");
+    }
+    ESP_LOGI(kTag, "Clock set from authenticated browser time");
+  }
 
   send_json(request, "{\"status\":\"saved\"}");
   return ESP_OK;

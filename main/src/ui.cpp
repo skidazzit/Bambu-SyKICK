@@ -23,6 +23,7 @@
 #include "png.h"
 #include "printsphere/board_config.hpp"
 #include "printsphere/audio_notifier.hpp"
+#include "printsphere/time_sync.hpp"
 
 #if defined(PRINTSPHERE_HW_VARIANT_AMOLED_1_75)
 #include "bsp/esp32_s3_touch_amoled_1_75.h"
@@ -83,6 +84,16 @@ constexpr uint32_t kV13FaceColors[] = {
     0x00FFFF, 0x1688FF, 0x33DD66, 0xFF9B31, 0xB66BFF,
     0xFF4141, 0xFFFFFF, 0xFF7DBC, 0xFFDD36
 };
+constexpr const char* kClockZoneOptions =
+    "UTC\nUS Eastern\nUS Central\nUS Mountain\nArizona\nUS Pacific\nAlaska\nHawaii"
+    "\nLondon\nBerlin\nTokyo\nSydney\nOther (Web Config)";
+constexpr const char* kClockZones[] = {
+    "UTC", "America/New_York", "America/Chicago", "America/Denver",
+    "America/Phoenix", "America/Los_Angeles", "America/Anchorage",
+    "America/Honolulu", "Europe/London", "Europe/Berlin",
+    "Asia/Tokyo", "Australia/Sydney"
+};
+constexpr size_t kClockZoneCount = sizeof(kClockZones) / sizeof(kClockZones[0]);
 constexpr const char* kV13FaceColorNames[] = {
     "Cyan", "Blue", "Green", "Orange", "Purple",
     "Red", "White", "Pink", "Yellow"
@@ -4178,8 +4189,8 @@ void Ui::update_v13_face_tick() {
     localtime_r(&now, &local_time);
     char time_text[32] = {};
     char date_text[48] = {};
-    strftime(time_text, sizeof(time_text), "%I:%M %p", &local_time);
-    strftime(date_text, sizeof(date_text), "%A, %B %d", &local_time);
+    strftime(time_text, sizeof(time_text), v13_preferences_.clock_24_hour ? "%H:%M" : "%I:%M %p", &local_time);
+    strftime(date_text, sizeof(date_text), "%a, %b %d", &local_time);
     set_label_text_if_changed(v13_clock_time_label_, now > 1700000000 ? time_text : "Syncing time...");
     set_label_text_if_changed(v13_clock_date_label_, now > 1700000000 ? date_text : "Connect to Wi-Fi for time");
   }
@@ -4655,25 +4666,58 @@ void Ui::open_v13_menu(int page) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   } else if (safe_page == 6) {
-    time_t now = time(nullptr);
+    // Clock settings use the persisted web timezone. SNTP owns UTC time.
+    const time_t now = time(nullptr);
     struct tm local_time{};
     localtime_r(&now, &local_time);
     char time_text[32] = {};
     char date_text[48] = {};
-    strftime(time_text, sizeof(time_text), "%I:%M %p", &local_time);
-    strftime(date_text, sizeof(date_text), "%A, %B %d", &local_time);
+    strftime(time_text, sizeof(time_text),
+             v13_preferences_.clock_24_hour ? "%H:%M" : "%I:%M %p", &local_time);
+    strftime(date_text, sizeof(date_text), "%a, %b %d", &local_time);
     lv_obj_t* clock_time = lv_label_create(v13_menu_);
     lv_label_set_text(clock_time, now > 1700000000 ? time_text : "Syncing time...");
     lv_obj_set_style_text_font(clock_time, &dosis_40, 0);
     lv_obj_set_style_text_color(clock_time, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_align(clock_time, LV_ALIGN_CENTER, 0, -36);
+    lv_obj_align(clock_time, LV_ALIGN_CENTER, 0, -119);
     lv_obj_t* clock_date = lv_label_create(v13_menu_);
-    lv_label_set_text(clock_date, now > 1700000000 ? date_text : "Connect to Wi-Fi for time");
+    lv_label_set_text(clock_date, now > 1700000000 ? date_text : "Sync from Web Config");
+    lv_obj_set_style_text_font(clock_date, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_color(clock_date, lv_color_hex(0xD8E8EA), 0);
-    lv_obj_align(clock_date, LV_ALIGN_CENTER, 0, 18);
+    lv_obj_align(clock_date, LV_ALIGN_CENTER, 0, -71);
     v13_clock_time_label_ = clock_time;
     v13_clock_date_label_ = clock_date;
-    button("Back", 375, [](lv_event_t* e) {
+    label("Time Zone", 195);
+    const std::string saved_zone = sound_config_store_
+        ? sound_config_store_->load_timezone_iana() : "";
+    size_t selected_zone = kClockZoneCount;  // Keep other web zones unchanged.
+    for (size_t i = 0; i < kClockZoneCount; ++i) {
+      if (saved_zone == kClockZones[i] || (saved_zone.empty() && i == 0)) {
+        selected_zone = i;
+        break;
+      }
+    }
+    dropdown(kClockZoneOptions, 223, static_cast<int>(selected_zone),
+             [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      const uint16_t selected = lv_dropdown_get_selected(lv_event_get_target_obj(e));
+      if (selected >= kClockZoneCount || !ui->sound_config_store_) return;
+      const std::string zone = kClockZones[selected];
+      if (ui->sound_config_store_->save_timezone_iana(zone) == ESP_OK) {
+        time_sync::set_timezone_iana(zone);
+        // The clock timer repaints this label without destroying the picker.
+      }
+    });
+    label("Clock Format", 285);
+    dropdown("12-hour\n24-hour", 311, v13_preferences_.clock_24_hour ? 1 : 0,
+             [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      ui->v13_preferences_.clock_24_hour =
+          lv_dropdown_get_selected(lv_event_get_target_obj(e)) == 1;
+      save_v13_menu_preferences(ui->v13_preferences_);
+      // Repaint on the next clock tick; keep the active dropdown alive.
+    });
+    button("Back", 383, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   } else if (safe_page == 3) {
