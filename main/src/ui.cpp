@@ -3342,8 +3342,9 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_add_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN);
   lv_obj_move_foreground(v13_menu_);
 
-  // Physical PWR-key panel: created once and layered above every app page.
-  power_menu_ = lv_obj_create(screen_);
+  // Keep the PWR panel on LVGL's top layer. Faces, the printer, and all
+  // settings menus can reorder normal screen objects without covering it.
+  power_menu_ = lv_obj_create(lv_display_get_layer_top(display_));
   lv_obj_set_size(power_menu_, board::kDisplayWidth, board::kDisplayHeight);
   lv_obj_center(power_menu_);
   lv_obj_set_style_bg_color(power_menu_, lv_color_hex(0x080F16), 0);
