@@ -189,6 +189,9 @@ class Ui {
   bool face_home_visible_ = false;
   lv_coord_t face_touch_start_x_ = 0;
   lv_coord_t face_touch_start_y_ = 0;
+  uint32_t face_touch_start_tick_ms_ = 0;
+  bool face_touch_active_ = false;
+  bool face_touch_moved_ = false;
   bool auto_print_running_ = false;
   bool idle_printer_timer_active_ = false;
   uint32_t idle_printer_since_ms_ = 0;

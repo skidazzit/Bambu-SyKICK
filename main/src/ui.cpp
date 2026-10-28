@@ -77,6 +77,16 @@ constexpr int kPage3StatusAboveImageY = -138;
 constexpr int kAuxTempRowY = 28;
 constexpr int kSwipeThresholdPx = 24;
 constexpr int kGestureAxisLockMarginPx = 16;
+constexpr uint32_t kFaceColorHoldMs = 3000U;
+constexpr int kFaceColorHoldMaxTravelPx = 24;
+constexpr uint32_t kV13FaceColors[] = {
+    0x00FFFF, 0x1688FF, 0x33DD66, 0xFF9B31, 0xB66BFF,
+    0xFF4141, 0xFFFFFF, 0xFF7DBC, 0xFFDD36
+};
+constexpr const char* kV13FaceColorNames[] = {
+    "Cyan", "Blue", "Green", "Orange", "Purple",
+    "Red", "White", "Pink", "Yellow"
+};
 constexpr uint32_t kIdlePrinterReturnMs = 5U * 60U * 1000U;
 constexpr int kRotatedVisualOffsetX = 0;
 constexpr int kRotatedVisualOffsetY = 0;
@@ -3298,11 +3308,7 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_clear_flag(face_home_, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(face_home_, LV_OBJ_FLAG_CLICKABLE);
   face_renderer_ = std::make_unique<VideoFace>(face_home_);
-  constexpr uint32_t kV13Colors[] = {
-      0x00FFFF, 0x1688FF, 0x33DD66, 0xFF9B31, 0xB66BFF,
-      0xFF4141, 0xFFFFFF, 0xFF7DBC, 0xFFDD36
-  };
-  face_renderer_->SetColor(kV13Colors[static_cast<uint8_t>(v13_preferences_.face_color)],
+  face_renderer_->SetColor(kV13FaceColors[static_cast<uint8_t>(v13_preferences_.face_color)],
                            v13_preferences_.match_heart_color);
   constexpr const char* kV13Faces[] = {
       "neutral", "sad", "happy", "glossy", "sleepy", "surprised", "look_around"
@@ -4170,15 +4176,11 @@ void Ui::update_v13_face_tick() {
 
 void Ui::refresh_v13_face() {
   if (!face_renderer_) return;
-  constexpr uint32_t colors[] = {
-      0x00FFFF, 0x1688FF, 0x33DD66, 0xFF9B31, 0xB66BFF,
-      0xFF4141, 0xFFFFFF, 0xFF7DBC, 0xFFDD36
-  };
   constexpr const char* faces[] = {
       "neutral", "sad", "happy", "glossy", "sleepy", "surprised", "look_around"
   };
   v13_preferences_.clamp();
-  face_renderer_->SetColor(colors[static_cast<uint8_t>(v13_preferences_.face_color)],
+  face_renderer_->SetColor(kV13FaceColors[static_cast<uint8_t>(v13_preferences_.face_color)],
                            v13_preferences_.match_heart_color);
   face_renderer_->SetEmotion(faces[static_cast<uint8_t>(v13_preferences_.main_face)]);
 }
@@ -4199,8 +4201,8 @@ void Ui::open_v13_menu(int page) {
   lv_obj_clean(v13_menu_);
   lv_obj_scroll_to_y(v13_menu_, 0, LV_ANIM_OFF);
   lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_OFF);
-  const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About", "Idle Face", "Clock", "Sound", "Sort Menu"};
-  const int safe_page = std::clamp(page, 0, 8);
+  const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About", "Idle Face", "Clock", "Sound", "Sort Menu", "Face Color"};
+  const int safe_page = std::clamp(page, 0, 9);
   lv_obj_t* title = lv_label_create(v13_menu_);
   lv_label_set_text(title, titles[safe_page]);
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
@@ -4469,6 +4471,55 @@ void Ui::open_v13_menu(int page) {
     footer("Back", 73, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
+  } else if (safe_page == 9) {
+    // Three-second hold on Faces opens a quick color picker. Use the same
+    // stored option and palette as Face Options, so both menus stay in sync.
+    for (uint8_t index = 0; index < 9; ++index) {
+      const int column = index % 3;
+      const int row = index / 3;
+      const bool selected = static_cast<uint8_t>(v13_preferences_.face_color) == index;
+      lv_obj_t* tile = lv_button_create(v13_menu_);
+      lv_obj_set_size(tile, 112, 88);
+      lv_obj_align(tile, LV_ALIGN_TOP_MID, (column - 1) * 120, 99 + row * 96);
+      lv_obj_set_style_radius(tile, 16, 0);
+      lv_obj_set_style_bg_color(tile, lv_color_hex(0x122C37), 0);
+      lv_obj_set_style_border_width(tile, selected ? 3 : 1, 0);
+      lv_obj_set_style_border_color(tile,
+          lv_color_hex(selected ? 0xFFFFFF : 0x3B5965), 0);
+      lv_obj_set_style_pad_all(tile, 0, 0);
+      lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
+
+      lv_obj_t* swatch = lv_obj_create(tile);
+      lv_obj_set_size(swatch, 35, 35);
+      lv_obj_align(swatch, LV_ALIGN_TOP_MID, 0, 8);
+      lv_obj_set_style_radius(swatch, LV_RADIUS_CIRCLE, 0);
+      lv_obj_set_style_bg_color(swatch, lv_color_hex(kV13FaceColors[index]), 0);
+      lv_obj_set_style_bg_opa(swatch, LV_OPA_COVER, 0);
+      lv_obj_set_style_border_width(swatch, 0, 0);
+      lv_obj_set_style_pad_all(swatch, 0, 0);
+      lv_obj_clear_flag(swatch, LV_OBJ_FLAG_CLICKABLE);
+      lv_obj_clear_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
+
+      lv_obj_t* name = lv_label_create(tile);
+      lv_label_set_text(name, kV13FaceColorNames[index]);
+      lv_obj_set_style_text_font(name, &lv_font_montserrat_18, 0);
+      lv_obj_set_style_text_color(name, lv_color_hex(0xE9FFFF), 0);
+      lv_obj_align(name, LV_ALIGN_BOTTOM_MID, 0, -7);
+      lv_obj_add_event_cb(tile, [](lv_event_t* e) {
+        auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+        if (ui == nullptr) return;
+        // The title is child 0; the nine color tiles follow in palette order.
+        const uint32_t child_index = lv_obj_get_index(lv_event_get_target_obj(e));
+        if (child_index < 1 || child_index > 9) return;
+        ui->v13_preferences_.face_color = static_cast<V13FaceColor>(child_index - 1);
+        ui->refresh_v13_face();
+        save_v13_menu_preferences(ui->v13_preferences_);
+        ui->close_v13_menu();
+      }, LV_EVENT_CLICKED, this);
+    }
+    button("Back to Faces", 391, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->close_v13_menu();
+    });
   } else if (safe_page == 1) {
     label("Main face mode", 78);
     dropdown("Randomize\nMood\nSingle", 104,
@@ -4621,30 +4672,59 @@ void Ui::face_event_cb(lv_event_t* event) {
 void Ui::handle_face_event(lv_event_t* event) {
   if (!face_home_visible_) return;
   const lv_event_code_t code = lv_event_get_code(event);
-  if (code != LV_EVENT_PRESSED && code != LV_EVENT_RELEASED) return;
+  if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING &&
+      code != LV_EVENT_RELEASED && code != LV_EVENT_PRESS_LOST) return;
+
+  if (code == LV_EVENT_PRESS_LOST) {
+    face_touch_active_ = false;
+    return;
+  }
   lv_indev_t* indev = lv_indev_get_act();
   if (!indev) return;
   lv_point_t point{};
   lv_indev_get_point(indev, &point);
+
   if (code == LV_EVENT_PRESSED) {
+    face_touch_active_ = true;
+    face_touch_moved_ = false;
+    face_touch_start_tick_ms_ = lv_tick_get();
     face_touch_start_x_ = point.x;
     face_touch_start_y_ = point.y;
-    v13_face_options_.Activity(lv_tick_get());
+    v13_face_options_.Activity(face_touch_start_tick_ms_);
     note_activity(false);
-  } else {
-    const int dx = static_cast<int>(point.x - face_touch_start_x_);
-    const int dy = static_cast<int>(face_touch_start_y_ - point.y);
-    if (dy >= kSwipeThresholdPx &&
-        dy > std::abs(dx) + kGestureAxisLockMarginPx) {
-      // Bottom-to-top toggles Faces Home to the printer dashboard.
-      show_printer_home_locked();
-    } else if (dy <= -kSwipeThresholdPx &&
-               -dy > std::abs(dx) + kGestureAxisLockMarginPx) {
-      // Keep top-to-bottom as the Control Center gesture.
-      open_v13_menu(0);
-    }
-    // Left/right swipes never open the menu or switch between apps.
+    return;
   }
+  if (!face_touch_active_) return;
+
+  const int dx = static_cast<int>(point.x - face_touch_start_x_);
+  const int dy = static_cast<int>(face_touch_start_y_ - point.y);
+  if (code == LV_EVENT_PRESSING) {
+    // Any swipe cancels the long hold, even if the finger comes back.
+    if (std::abs(dx) > kFaceColorHoldMaxTravelPx ||
+        std::abs(dy) > kFaceColorHoldMaxTravelPx) {
+      face_touch_moved_ = true;
+    }
+    if (!face_touch_moved_ &&
+        static_cast<uint32_t>(lv_tick_get() - face_touch_start_tick_ms_) >=
+            kFaceColorHoldMs) {
+      face_touch_active_ = false;  // Ignore the release after opening the menu.
+      note_activity(true);
+      open_v13_menu(9);
+    }
+    return;
+  }
+
+  face_touch_active_ = false;
+  if (dy >= kSwipeThresholdPx &&
+      dy > std::abs(dx) + kGestureAxisLockMarginPx) {
+    // Bottom-to-top toggles Faces Home to the printer dashboard.
+    show_printer_home_locked();
+  } else if (dy <= -kSwipeThresholdPx &&
+             -dy > std::abs(dx) + kGestureAxisLockMarginPx) {
+    // Keep top-to-bottom as the Control Center gesture.
+    open_v13_menu(0);
+  }
+  // Left/right swipes never open the menu or switch between apps.
 }
 
 void Ui::screen_event_cb(lv_event_t* event) {
