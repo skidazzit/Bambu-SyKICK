@@ -3415,14 +3415,14 @@ esp_err_t Ui::build_dashboard() {
   return ESP_OK;
 }
 
-void Ui::open_power_menu() {
-  if (!initialized_ || power_menu_ == nullptr) return;
+bool Ui::open_power_menu() {
+  if (!initialized_ || power_menu_ == nullptr) return false;
   // A power-key hold must also wake a display whose LVGL worker was paused.
   request_wake_display();
-  LvglLockGuard lock(500, "open_power_menu");
+  LvglLockGuard lock(1200, "open_power_menu");
   if (!lock.locked()) {
-    ESP_LOGE(kTag, "Failed to open PWR menu: LVGL lock timed out");
-    return;
+    ESP_LOGW(kTag, "PWR menu deferred: display worker busy");
+    return false;
   }
   device_power_action_requested_.store(static_cast<uint8_t>(DevicePowerAction::kNone));
   power_touch_active_ = false;
@@ -3431,6 +3431,8 @@ void Ui::open_power_menu() {
   lv_obj_clear_flag(power_menu_, LV_OBJ_FLAG_HIDDEN);
   lv_obj_move_foreground(power_menu_);
   power_menu_active_.store(true);
+  ESP_LOGI(kTag, "Power menu displayed");
+  return true;
 }
 
 void Ui::show_power_off_failure() {

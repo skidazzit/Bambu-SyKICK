@@ -343,9 +343,11 @@ void Application::run() {
 
   ESP_LOGI(kTag, "Bootstrap complete");
 
+  bool power_menu_pending = false;
   while (true) {
-    if (pmu_manager_.consume_power_menu_request()) {
-      ui_.open_power_menu();
+    if (pmu_manager_.consume_power_menu_request()) power_menu_pending = true;
+    if (power_menu_pending && (ui_.is_power_menu_active() || ui_.open_power_menu())) {
+      power_menu_pending = false;
     }
     const DevicePowerAction power_action = ui_.consume_device_power_action_request();
     if (power_action == DevicePowerAction::kRestart) {

@@ -109,7 +109,7 @@ class Ui {
   void update_printer_cards(const std::vector<PrinterCardInfo>& cards);
   int consume_printer_switch_request();
   void request_wake_display();
-  void open_power_menu();
+  bool open_power_menu();
   void show_power_off_failure();
   bool is_power_menu_active() const {
     return power_menu_active_.load(std::memory_order_relaxed);
