@@ -4206,26 +4206,35 @@ void Ui::open_v13_menu(int page) {
   lv_obj_t* title = lv_label_create(v13_menu_);
   lv_label_set_text(title, titles[safe_page]);
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_32, 0);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 28);
+  // Keep even the longest menu title within the narrow upper round edge.
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 34);
 
   auto button = [&](const char* caption, int y, lv_event_cb_t callback) {
+    // Below y=370 the circular bezel narrows sharply. A full-width button
+    // looks fine in LVGL's square layout but gets cut off on the real panel.
+    const bool footer = y >= 370;
     lv_obj_t* b = lv_button_create(v13_menu_);
-    lv_obj_set_size(b, 284, 43);
-    lv_obj_align(b, LV_ALIGN_TOP_MID, 0, y);
+    lv_obj_set_size(b, footer ? 220 : 284, footer ? 38 : 43);
+    lv_obj_align(b, LV_ALIGN_TOP_MID, 0, footer ? std::min(y, 385) : y);
     lv_obj_set_style_radius(b, 16, 0);
     lv_obj_set_style_bg_color(b, lv_color_hex(0x10424D), 0);
     lv_obj_set_style_border_width(b, 1, 0);
     lv_obj_set_style_border_color(b, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_pad_all(b, 0, 0);
     lv_obj_t* label = lv_label_create(b);
     lv_label_set_text(label, caption);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(label,
+                               footer ? &lv_font_montserrat_18 : &lv_font_montserrat_20, 0);
     lv_obj_center(label);
     lv_obj_add_event_cb(b, callback, LV_EVENT_CLICKED, this);
   };
   auto label = [&](const char* caption, int y) {
     lv_obj_t* l = lv_label_create(v13_menu_);
+    lv_obj_set_width(l, 320);
+    lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
     lv_label_set_text(l, caption);
+    lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(l, lv_color_hex(0xBBD4DA), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_18, 0);
     lv_obj_align(l, LV_ALIGN_TOP_MID, 0, y);
