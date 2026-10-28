@@ -194,6 +194,7 @@ class Ui {
   bool face_touch_active_ = false;
   bool face_touch_moved_ = false;
   bool auto_print_running_ = false;
+  bool print_started_view_shown_ = false;
   bool idle_printer_timer_active_ = false;
   uint32_t idle_printer_since_ms_ = 0;
   std::atomic<bool> print_screen_hold_active_{false};

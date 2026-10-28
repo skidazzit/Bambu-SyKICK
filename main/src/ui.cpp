@@ -3394,11 +3394,27 @@ void Ui::update_print_screen_focus_locked(const PrinterSnapshot& snapshot) {
        lifecycle == PrintLifecycleState::kPaused);
   const uint32_t now_ms = lv_tick_get();
 
+  // The preparing stage can open Bambu before the print-start sound fires.
+  // If Faces is brought forward during preparation, reopen Bambu once when
+  // printing truly begins. Keep the latch through pause/reconnect so a
+  // later manual return to Faces is respected.
+  if (lifecycle == PrintLifecycleState::kPreparing ||
+      lifecycle == PrintLifecycleState::kIdle || finished_or_failed) {
+    print_started_view_shown_ = false;
+  }
+  const bool first_printing_frame =
+      lifecycle == PrintLifecycleState::kPrinting && !print_started_view_shown_;
+  if (lifecycle == PrintLifecycleState::kPrinting) {
+    print_started_view_shown_ = true;
+  }
+
   if (job_running) {
     // A real print takes priority over the idle timeout, even when paused.
-    // Only open the dashboard at the start of a new job; manual swipes work.
     idle_printer_timer_active_ = false;
-    if (!auto_print_running_) {
+    if (!auto_print_running_ || (first_printing_frame && face_home_visible_)) {
+      if (first_printing_frame && face_home_visible_) {
+        ESP_LOGI(kTag, "Print started: returning from Faces to Bambu dashboard");
+      }
       auto_print_running_ = true;
       show_printer_home_locked();
     }
