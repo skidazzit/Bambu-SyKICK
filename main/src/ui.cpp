@@ -3396,7 +3396,21 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_set_style_text_font(power_hint, &lv_font_montserrat_18, 0);
   lv_obj_set_style_text_color(power_hint, lv_color_hex(0xA5C9D3), 0);
   lv_obj_align(power_hint, LV_ALIGN_TOP_MID, 0, 351);
-  // Inactive until a physical PWR hold selects this screen.
+  // Handle PWR requests inside LVGL's own worker. The animated face can
+  // keep LVGL's mutex busy, so the main task must not wait for that lock.
+  lv_timer_create([](lv_timer_t* timer) {
+    auto* ui = static_cast<Ui*>(lv_timer_get_user_data(timer));
+    if (!ui->power_menu_open_pending_.exchange(false, std::memory_order_relaxed)) return;
+    if (ui->power_menu_active_.load(std::memory_order_relaxed)) return;
+    ui->device_power_action_requested_.store(static_cast<uint8_t>(DevicePowerAction::kNone));
+    ui->power_touch_active_ = false;
+    ui->power_touch_swiped_ = false;
+    lv_label_set_text(ui->power_menu_status_, "Choose an action");
+    ui->power_menu_active_.store(true, std::memory_order_relaxed);
+    lv_screen_load(ui->power_menu_);
+    ESP_LOGI(kTag, "Power screen shown by LVGL worker (from %s)",
+             ui->face_home_visible_ ? "Faces" : "Bambu/menu");
+  }, 100, this);
 
   lv_obj_add_event_cb(screen_, &Ui::screen_event_cb, LV_EVENT_ALL, this);
   lv_obj_update_layout(pager_);
@@ -3418,21 +3432,11 @@ esp_err_t Ui::build_dashboard() {
 
 bool Ui::open_power_menu() {
   if (!initialized_ || power_menu_ == nullptr) return false;
-  // A power-key hold must also wake a display whose LVGL worker was paused.
+  // Wake a paused display from the main task, then defer all LVGL changes to
+  // its own timer. This works even while Faces is drawing a frame.
   request_wake_display();
-  LvglLockGuard lock(1200, "open_power_menu");
-  if (!lock.locked()) {
-    ESP_LOGW(kTag, "PWR menu deferred: display worker busy");
-    return false;
-  }
-  device_power_action_requested_.store(static_cast<uint8_t>(DevicePowerAction::kNone));
-  power_touch_active_ = false;
-  power_touch_swiped_ = false;
-  lv_label_set_text(power_menu_status_, "Choose an action");
-  power_menu_active_.store(true);
-  lv_screen_load(power_menu_);
-  ESP_LOGI(kTag, "Power menu displayed (previous=%s)",
-           face_home_visible_ ? "Faces" : "Bambu/menu");
+  power_menu_open_pending_.store(true, std::memory_order_relaxed);
+  ESP_LOGI(kTag, "Power screen requested");
   return true;
 }
 

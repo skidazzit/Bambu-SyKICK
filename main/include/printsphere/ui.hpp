@@ -201,6 +201,7 @@ class Ui {
   lv_obj_t* power_menu_ = nullptr;
   lv_obj_t* power_menu_status_ = nullptr;
   std::atomic<bool> power_menu_active_{false};
+  std::atomic<bool> power_menu_open_pending_{false};
   std::atomic<uint8_t> device_power_action_requested_{static_cast<uint8_t>(DevicePowerAction::kNone)};
   lv_coord_t power_touch_start_x_ = 0;
   lv_coord_t power_touch_start_y_ = 0;
