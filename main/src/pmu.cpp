@@ -9,6 +9,9 @@
 #include "driver/i2c_master.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 namespace printsphere {
 
@@ -16,9 +19,12 @@ namespace {
 
 constexpr char kTag[] = "printsphere.pmu";
 constexpr uint32_t kI2cTimeoutMs = 1000;
+constexpr int64_t kPowerMenuHoldUs = 2000000;
+constexpr uint32_t kPowerKeyPollMs = 80;
 
 XPowersPMU s_pmu;
 i2c_master_dev_handle_t s_pmu_device = nullptr;
+esp_io_expander_handle_t s_power_key_expander = nullptr;
 
 int pmu_register_read(uint8_t, uint8_t reg_addr, uint8_t* data, uint8_t len) {
   if (s_pmu_device == nullptr) {
@@ -90,10 +96,65 @@ esp_err_t PmuManager::initialize() {
   s_pmu.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_400MA);
   s_pmu.setChargerTerminationCurr(XPOWERS_AXP2101_CHG_ITERM_25MA);
   s_pmu.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2);
+  // Keep the hardware emergency shutdown available on an 8-second PWR hold.
+  if (!s_pmu.setPowerKeyPressOffTime(XPOWERS_POWEROFF_8S)) {
+    ESP_LOGW(kTag, "Could not configure 8-second hardware power-off");
+  }
 
   initialized_ = true;
+  s_power_key_expander = bsp_io_expander_init();
+  if (s_power_key_expander != nullptr &&
+      esp_io_expander_set_dir(s_power_key_expander, IO_EXPANDER_PIN_NUM_4,
+                              IO_EXPANDER_INPUT) == ESP_OK) {
+    if (xTaskCreate(&PmuManager::power_key_poll_task, "sykick_pwr_key", 3072, this,
+                    tskIDLE_PRIORITY + 1, nullptr) != pdPASS) {
+      ESP_LOGE(kTag, "PWR key monitor task could not start");
+    }
+  } else {
+    ESP_LOGE(kTag, "PWR key input unavailable; power menu disabled");
+  }
   ESP_LOGI(kTag, "PMU ready (AXP2101)");
   return ESP_OK;
+}
+
+void PmuManager::power_key_poll_task(void* context) {
+  auto* manager = static_cast<PmuManager*>(context);
+  bool first_release_seen = false;
+  bool hold_reported = false;
+  int64_t pressed_since_us = 0;
+  for (;;) {
+    uint32_t levels = 0;
+    const esp_err_t result = esp_io_expander_get_level(
+        s_power_key_expander, IO_EXPANDER_PIN_NUM_4, &levels);
+    if (result != ESP_OK) {
+      // An I2C glitch must never be mistaken for a button hold.
+      pressed_since_us = 0;
+      hold_reported = false;
+    } else if ((levels & IO_EXPANDER_PIN_NUM_4) == 0) {
+      first_release_seen = true;
+      pressed_since_us = 0;
+      hold_reported = false;
+    } else if (first_release_seen && !hold_reported) {
+      const int64_t now_us = esp_timer_get_time();
+      if (pressed_since_us == 0) {
+        pressed_since_us = now_us;
+      } else if (now_us - pressed_since_us >= kPowerMenuHoldUs) {
+        hold_reported = true;
+        manager->power_menu_requested_.store(true, std::memory_order_relaxed);
+        ESP_LOGI(kTag, "PWR held for 2 seconds; requesting power menu");
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(kPowerKeyPollMs));
+  }
+}
+
+esp_err_t PmuManager::power_off() {
+  if (!initialized_) return ESP_ERR_INVALID_STATE;
+  ESP_LOGI(kTag, "Requesting AXP2101 shutdown");
+  s_pmu.shutdown();
+  // If power remains (for example, USB still supplies power), report it.
+  vTaskDelay(pdMS_TO_TICKS(500));
+  return ESP_FAIL;
 }
 
 PowerSnapshot PmuManager::sample() const {
@@ -316,6 +377,10 @@ PowerSnapshot PmuManager::sample() const {
   maybe_log_power_diag(raw, millivolts, battery_voltage, stable_state, inst_state, snapshot);
 
   return snapshot;
+}
+
+esp_err_t PmuManager::power_off() {
+  return ESP_ERR_NOT_SUPPORTED;
 }
 
 }  // namespace printsphere

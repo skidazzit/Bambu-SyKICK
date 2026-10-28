@@ -8,6 +8,7 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_pm.h"
+#include "esp_system.h"
 #include "esp_littlefs.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
@@ -206,10 +207,11 @@ PrintLifecycleState lifecycle_after_print_command(PrintCommand cmd) {
   }
 }
 
-void wait_for_next_iteration(Ui& ui, TickType_t delay) {
+void wait_for_next_iteration(Ui& ui, PmuManager& pmu, TickType_t delay) {
   TickType_t remaining = delay;
   while (remaining > 0) {
-    if (ui.has_chamber_light_toggle_request() || ui.has_print_command_request()) {
+    if (ui.has_chamber_light_toggle_request() || ui.has_print_command_request() ||
+        pmu.has_power_menu_request() || ui.has_device_power_action_request()) {
       break;
     }
     const bool touch_wake_poll_active = ui.screen_power_mode() == ScreenPowerMode::kOff;
@@ -222,7 +224,8 @@ void wait_for_next_iteration(Ui& ui, TickType_t delay) {
     vTaskDelay(slice);
     remaining -= slice;
 
-    if (ui.has_chamber_light_toggle_request() || ui.has_print_command_request()) {
+    if (ui.has_chamber_light_toggle_request() || ui.has_print_command_request() ||
+        pmu.has_power_menu_request() || ui.has_device_power_action_request()) {
       break;
     }
     if (touch_wake_poll_active && gpio_get_level(BSP_LCD_TOUCH_INT) == 0) {
@@ -341,6 +344,19 @@ void Application::run() {
   ESP_LOGI(kTag, "Bootstrap complete");
 
   while (true) {
+    if (pmu_manager_.consume_power_menu_request()) {
+      ui_.open_power_menu();
+    }
+    const DevicePowerAction power_action = ui_.consume_device_power_action_request();
+    if (power_action == DevicePowerAction::kRestart) {
+      ESP_LOGI(kTag, "Power panel: restarting");
+      esp_restart();
+    } else if (power_action == DevicePowerAction::kShutdown) {
+      const esp_err_t result = pmu_manager_.power_off();
+      ESP_LOGW(kTag, "Power panel: shutdown did not complete (%s)",
+               esp_err_to_name(result));
+      ui_.show_power_off_failure();
+    }
     const TickType_t now_tick = xTaskGetTickCount();
     const uint64_t now_ms = static_cast<uint64_t>(esp_timer_get_time() / 1000ULL);
     if (ui_.consume_portal_unlock_request()) {
@@ -772,7 +788,7 @@ void Application::run() {
     // no-print timeout. Normal dimming resumes on Faces Home.
     const bool keep_screen_awake =
         provisioning_active || camera_page_active || page_transition_active ||
-        ui_.print_screen_hold_active();
+        ui_.print_screen_hold_active() || ui_.is_power_menu_active();
     if (filament_wake_enabled_ && is_filament && is_external_spool) {
       // External-spool filament change needs the user at the printer: wake once.
       ui_.request_wake_display();
@@ -791,7 +807,7 @@ void Application::run() {
     last_source_mode_ = source_mode_;
     last_wifi_connected_ = wifi_connected;
     last_camera_page_active_ = camera_page_visible;
-    wait_for_next_iteration(ui_, loop_delay);
+    wait_for_next_iteration(ui_, pmu_manager_, loop_delay);
   }
 }
 

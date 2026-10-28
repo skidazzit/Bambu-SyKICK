@@ -3342,6 +3342,61 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_add_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN);
   lv_obj_move_foreground(v13_menu_);
 
+  // Physical PWR-key panel: created once and layered above every app page.
+  power_menu_ = lv_obj_create(screen_);
+  lv_obj_set_size(power_menu_, board::kDisplayWidth, board::kDisplayHeight);
+  lv_obj_center(power_menu_);
+  lv_obj_set_style_bg_color(power_menu_, lv_color_hex(0x080F16), 0);
+  lv_obj_set_style_bg_opa(power_menu_, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(power_menu_, 0, 0);
+  lv_obj_set_style_pad_all(power_menu_, 0, 0);
+  lv_obj_remove_flag(power_menu_, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(power_menu_, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(power_menu_, &Ui::power_menu_event_cb, LV_EVENT_ALL, this);
+  lv_obj_t* power_title = lv_label_create(power_menu_);
+  lv_label_set_text(power_title, "Power");
+  lv_obj_set_style_text_font(power_title, &lv_font_montserrat_24, 0);
+  lv_obj_set_style_text_color(power_title, lv_color_hex(0xFFFFFF), 0);
+  lv_obj_align(power_title, LV_ALIGN_TOP_MID, 0, 89);
+  power_menu_status_ = lv_label_create(power_menu_);
+  lv_label_set_text(power_menu_status_, "Choose an action");
+  lv_obj_set_width(power_menu_status_, 300);
+  lv_obj_set_style_text_font(power_menu_status_, &lv_font_montserrat_18, 0);
+  lv_obj_set_style_text_align(power_menu_status_, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_color(power_menu_status_, lv_color_hex(0xA5C9D3), 0);
+  lv_obj_align(power_menu_status_, LV_ALIGN_TOP_MID, 0, 137);
+  auto power_button = [&](const char* label, int y, uint32_t color, lv_event_cb_t callback) {
+    lv_obj_t* btn = lv_button_create(power_menu_);
+    lv_obj_set_size(btn, 254, 57);
+    lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, y);
+    lv_obj_set_style_radius(btn, 20, 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(color), 0);
+    lv_obj_set_style_border_width(btn, 1, 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(0x40CADA), 0);
+    lv_obj_add_flag(btn, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_t* caption = lv_label_create(btn);
+    lv_label_set_text(caption, label);
+    lv_obj_set_style_text_font(caption, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(caption, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_center(caption);
+    lv_obj_add_event_cb(btn, callback, LV_EVENT_CLICKED, this);
+  };
+  power_button("Restart", 194, 0x0A697D, [](lv_event_t* e) {
+    static_cast<Ui*>(lv_event_get_user_data(e))->queue_power_action_locked(
+        DevicePowerAction::kRestart);
+  });
+  power_button("Shut Down", 264, 0x8D3948, [](lv_event_t* e) {
+    static_cast<Ui*>(lv_event_get_user_data(e))->queue_power_action_locked(
+        DevicePowerAction::kShutdown);
+  });
+  lv_obj_t* power_hint = lv_label_create(power_menu_);
+  lv_label_set_text(power_hint, LV_SYMBOL_UP " Swipe up to exit");
+  lv_obj_set_style_text_font(power_hint, &lv_font_montserrat_18, 0);
+  lv_obj_set_style_text_color(power_hint, lv_color_hex(0xA5C9D3), 0);
+  lv_obj_align(power_hint, LV_ALIGN_TOP_MID, 0, 351);
+  lv_obj_add_flag(power_menu_, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_move_foreground(power_menu_);
+
   lv_obj_add_event_cb(screen_, &Ui::screen_event_cb, LV_EVENT_ALL, this);
   lv_obj_update_layout(pager_);
   lv_obj_scroll_to_view(page1_, LV_ANIM_OFF);
@@ -3358,6 +3413,80 @@ esp_err_t Ui::build_dashboard() {
   update_portal_access_visuals_locked();
 
   return ESP_OK;
+}
+
+void Ui::open_power_menu() {
+  if (!initialized_ || power_menu_ == nullptr) return;
+  // A power-key hold must also wake a display whose LVGL worker was paused.
+  request_wake_display();
+  LvglLockGuard lock(500, "open_power_menu");
+  if (!lock.locked()) {
+    ESP_LOGE(kTag, "Failed to open PWR menu: LVGL lock timed out");
+    return;
+  }
+  device_power_action_requested_.store(static_cast<uint8_t>(DevicePowerAction::kNone));
+  power_touch_active_ = false;
+  power_touch_swiped_ = false;
+  lv_label_set_text(power_menu_status_, "Choose an action");
+  lv_obj_clear_flag(power_menu_, LV_OBJ_FLAG_HIDDEN);
+  lv_obj_move_foreground(power_menu_);
+  power_menu_active_.store(true);
+}
+
+void Ui::show_power_off_failure() {
+  if (!initialized_ || power_menu_ == nullptr) return;
+  LvglLockGuard lock(500, "power_off_failure");
+  if (!lock.locked()) return;
+  lv_label_set_text(power_menu_status_, "Power remains on (USB?)");
+  lv_obj_move_foreground(power_menu_);
+}
+
+void Ui::queue_power_action_locked(DevicePowerAction action) {
+  if (!power_menu_active_.load() || power_touch_swiped_) return;
+  lv_label_set_text(power_menu_status_, action == DevicePowerAction::kRestart
+      ? "Restarting..." : "Shutting down...");
+  device_power_action_requested_.store(static_cast<uint8_t>(action));
+}
+
+void Ui::close_power_menu_locked() {
+  power_touch_active_ = false;
+  power_menu_active_.store(false);
+  if (power_menu_ != nullptr) lv_obj_add_flag(power_menu_, LV_OBJ_FLAG_HIDDEN);
+}
+
+void Ui::power_menu_event_cb(lv_event_t* event) {
+  auto* ui = static_cast<Ui*>(lv_event_get_user_data(event));
+  if (ui != nullptr) ui->handle_power_menu_event(event);
+}
+
+void Ui::handle_power_menu_event(lv_event_t* event) {
+  if (!power_menu_active_.load()) return;
+  const lv_event_code_t code = lv_event_get_code(event);
+  if (code == LV_EVENT_PRESS_LOST) {
+    power_touch_active_ = false;
+    return;
+  }
+  if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING &&
+      code != LV_EVENT_RELEASED) return;
+  lv_indev_t* indev = lv_indev_get_act();
+  if (indev == nullptr) return;
+  lv_point_t pt{};
+  lv_indev_get_point(indev, &pt);
+  if (code == LV_EVENT_PRESSED) {
+    power_touch_active_ = true;
+    power_touch_start_x_ = pt.x;
+    power_touch_start_y_ = pt.y;
+    return;
+  }
+  if (!power_touch_active_) return;
+  const int dx = static_cast<int>(pt.x - power_touch_start_x_);
+  const int dy = static_cast<int>(power_touch_start_y_ - pt.y);
+  if (dy >= 50 && dy > std::abs(dx) + 16) {
+    power_touch_swiped_ = true;
+    close_power_menu_locked();  // Reveals the exact page/menu that was behind it.
+    return;
+  }
+  if (code == LV_EVENT_RELEASED) power_touch_active_ = false;
 }
 
 void Ui::show_faces_home_locked() {
@@ -3821,6 +3950,7 @@ void Ui::handle_pager_event(lv_event_t* event) {
 }
 
 void Ui::handle_screen_event(lv_event_t* event) {
+  if (power_menu_active_.load(std::memory_order_relaxed)) return;
   const lv_event_code_t code = lv_event_get_code(event);
   if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING && code != LV_EVENT_RELEASED &&
       code != LV_EVENT_PRESS_LOST && code != LV_EVENT_LONG_PRESSED) {
@@ -4169,6 +4299,9 @@ void Ui::v13_face_timer_cb(lv_timer_t* timer) {
 }
 
 void Ui::update_v13_face_tick() {
+  if (power_menu_active_.load(std::memory_order_relaxed) && power_menu_ != nullptr) {
+    lv_obj_move_foreground(power_menu_);
+  }
   // Close an untouched settings menu after 60 seconds. The LVGL display
   // tracks even brief taps and swipes on nested controls, so every menu
   // page resets the timeout without adding handlers to each button.
@@ -4386,27 +4519,21 @@ void Ui::open_v13_menu(int page) {
     nav_card("About", 6, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
     });
-    // Two fixed touch targets in the round-safe footer.
-    auto menu_footer = [&](const char* caption, int x, lv_event_cb_t callback) {
-      lv_obj_t* control = lv_button_create(v13_menu_);
-      lv_obj_set_size(control, 131, 42);
-      lv_obj_align(control, LV_ALIGN_TOP_MID, x, 364);
-      lv_obj_set_style_radius(control, 20, 0);
-      lv_obj_set_style_bg_color(control, lv_color_hex(0x10424D), 0);
-      lv_obj_set_style_border_width(control, 1, 0);
-      lv_obj_set_style_border_color(control, lv_color_hex(0x29DBE9), 0);
-      lv_obj_t* caption_label = lv_label_create(control);
-      lv_label_set_text(caption_label, caption);
-      lv_obj_set_style_text_font(caption_label, &lv_font_montserrat_18, 0);
-      lv_obj_center(caption_label);
-      lv_obj_add_event_cb(control, callback, LV_EVENT_CLICKED, this);
-    };
-    menu_footer("Restart", -73, [](lv_event_t* e) {
-      show_device_action_confirmation(lv_obj_get_parent(lv_event_get_target_obj(e)), false);
-    });
-    menu_footer(LV_SYMBOL_LEFT " Back", 73, [](lv_event_t* e) {
+    // Restart and shutdown live in the physical PWR-key menu.
+    lv_obj_t* back = lv_button_create(v13_menu_);
+    lv_obj_set_size(back, 218, 42);
+    lv_obj_align(back, LV_ALIGN_TOP_MID, 0, 364);
+    lv_obj_set_style_radius(back, 20, 0);
+    lv_obj_set_style_bg_color(back, lv_color_hex(0x10424D), 0);
+    lv_obj_set_style_border_width(back, 1, 0);
+    lv_obj_set_style_border_color(back, lv_color_hex(0x29DBE9), 0);
+    lv_obj_t* back_label = lv_label_create(back);
+    lv_label_set_text(back_label, LV_SYMBOL_LEFT " Back");
+    lv_obj_set_style_text_font(back_label, &lv_font_montserrat_18, 0);
+    lv_obj_center(back_label);
+    lv_obj_add_event_cb(back, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->close_v13_menu();
-    });
+    }, LV_EVENT_CLICKED, this);
   } else if (safe_page == 8) {
     // Focused sort: a round-screen-safe scrolling list with 52px arrow targets.
     lv_obj_remove_flag(v13_menu_, LV_OBJ_FLAG_SCROLLABLE);
