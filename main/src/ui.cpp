@@ -4142,6 +4142,19 @@ void Ui::v13_face_timer_cb(lv_timer_t* timer) {
 }
 
 void Ui::update_v13_face_tick() {
+  // Close an untouched settings menu after 60 seconds. The LVGL display
+  // tracks even brief taps and swipes on nested controls, so every menu
+  // page resets the timeout without adding handlers to each button.
+  if (v13_menu_ != nullptr && !lv_obj_has_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN)) {
+    constexpr uint32_t kMenuInactivityTimeoutMs = 60000U;
+    const uint32_t elapsed_since_open =
+        static_cast<uint32_t>(lv_tick_get() - v13_menu_open_tick_ms_);
+    if (elapsed_since_open >= kMenuInactivityTimeoutMs &&
+        lv_display_get_inactive_time(display_) >= kMenuInactivityTimeoutMs) {
+      close_v13_menu();  // Reveals whichever Faces/printer page was underneath.
+      return;
+    }
+  }
   if (v13_clock_time_label_ != nullptr && v13_clock_date_label_ != nullptr &&
       v13_menu_ != nullptr && !lv_obj_has_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN)) {
     const time_t now = time(nullptr);
@@ -4196,6 +4209,7 @@ void Ui::close_v13_menu() {
 
 void Ui::open_v13_menu(int page) {
   if (!v13_menu_) return;
+  v13_menu_open_tick_ms_ = lv_tick_get();
   v13_clock_time_label_ = nullptr;
   v13_clock_date_label_ = nullptr;
   lv_obj_clean(v13_menu_);

@@ -183,6 +183,7 @@ class Ui {
   std::unique_ptr<VideoFace> face_renderer_;
   FaceOptions v13_face_options_{};
   lv_timer_t* v13_face_timer_ = nullptr;
+  uint32_t v13_menu_open_tick_ms_ = 0;
   int v13_last_face_ = -1;
   V13MenuPreferences v13_preferences_{};
   uint8_t v13_sort_selected_ = 0;
