@@ -4517,9 +4517,24 @@ void Ui::open_v13_menu(int page) {
         ui->close_v13_menu();
       }, LV_EVENT_CLICKED, this);
     }
-    button("Back to Faces", 391, [](lv_event_t* e) {
+    // The round 466-pixel panel clips wide buttons near the bottom edge.
+    // Keep this action narrower and higher than the standard menu buttons.
+    lv_obj_t* back_button = lv_button_create(v13_menu_);
+    lv_obj_set_size(back_button, 220, 37);
+    lv_obj_align(back_button, LV_ALIGN_TOP_MID, 0, 385);
+    lv_obj_set_style_radius(back_button, 18, 0);
+    lv_obj_set_style_bg_color(back_button, lv_color_hex(0x10424D), 0);
+    lv_obj_set_style_border_width(back_button, 1, 0);
+    lv_obj_set_style_border_color(back_button, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_pad_all(back_button, 0, 0);
+    lv_obj_clear_flag(back_button, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* back_label = lv_label_create(back_button);
+    lv_label_set_text(back_label, "Back to Faces");
+    lv_obj_set_style_text_font(back_label, &lv_font_montserrat_18, 0);
+    lv_obj_center(back_label);
+    lv_obj_add_event_cb(back_button, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->close_v13_menu();
-    });
+    }, LV_EVENT_CLICKED, this);
   } else if (safe_page == 1) {
     label("Main face mode", 78);
     dropdown("Randomize\nMood\nSingle", 104,
