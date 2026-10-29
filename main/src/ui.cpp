@@ -23,6 +23,7 @@
 #include "png.h"
 #include "printsphere/board_config.hpp"
 #include "printsphere/audio_notifier.hpp"
+#include "printsphere/time_sync.hpp"
 
 #if defined(PRINTSPHERE_HW_VARIANT_AMOLED_1_75)
 #include "bsp/esp32_s3_touch_amoled_1_75.h"
@@ -77,6 +78,26 @@ constexpr int kPage3StatusAboveImageY = -138;
 constexpr int kAuxTempRowY = 28;
 constexpr int kSwipeThresholdPx = 24;
 constexpr int kGestureAxisLockMarginPx = 16;
+constexpr uint32_t kFaceColorHoldMs = 3000U;
+constexpr int kFaceColorHoldMaxTravelPx = 24;
+constexpr uint32_t kV13FaceColors[] = {
+    0x00FFFF, 0x1688FF, 0x33DD66, 0xFF9B31, 0xB66BFF,
+    0xFF4141, 0xFFFFFF, 0xFF7DBC, 0xFFDD36
+};
+constexpr const char* kClockZoneOptions =
+    "UTC\nUS Eastern\nUS Central\nUS Mountain\nArizona\nUS Pacific\nAlaska\nHawaii"
+    "\nLondon\nBerlin\nTokyo\nSydney\nOther (Web Config)";
+constexpr const char* kClockZones[] = {
+    "UTC", "America/New_York", "America/Chicago", "America/Denver",
+    "America/Phoenix", "America/Los_Angeles", "America/Anchorage",
+    "America/Honolulu", "Europe/London", "Europe/Berlin",
+    "Asia/Tokyo", "Australia/Sydney"
+};
+constexpr size_t kClockZoneCount = sizeof(kClockZones) / sizeof(kClockZones[0]);
+constexpr const char* kV13FaceColorNames[] = {
+    "Cyan", "Blue", "Green", "Orange", "Purple",
+    "Red", "White", "Pink", "Yellow"
+};
 constexpr uint32_t kIdlePrinterReturnMs = 5U * 60U * 1000U;
 constexpr int kRotatedVisualOffsetX = 0;
 constexpr int kRotatedVisualOffsetY = 0;
@@ -3298,11 +3319,7 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_clear_flag(face_home_, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(face_home_, LV_OBJ_FLAG_CLICKABLE);
   face_renderer_ = std::make_unique<VideoFace>(face_home_);
-  constexpr uint32_t kV13Colors[] = {
-      0x00FFFF, 0x1688FF, 0x33DD66, 0xFF9B31, 0xB66BFF,
-      0xFF4141, 0xFFFFFF, 0xFF7DBC, 0xFFDD36
-  };
-  face_renderer_->SetColor(kV13Colors[static_cast<uint8_t>(v13_preferences_.face_color)],
+  face_renderer_->SetColor(kV13FaceColors[static_cast<uint8_t>(v13_preferences_.face_color)],
                            v13_preferences_.match_heart_color);
   constexpr const char* kV13Faces[] = {
       "neutral", "sad", "happy", "glossy", "sleepy", "surprised", "look_around"
@@ -3325,6 +3342,76 @@ esp_err_t Ui::build_dashboard() {
   lv_obj_add_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN);
   lv_obj_move_foreground(v13_menu_);
 
+  // Use an independent LVGL screen, not an overlay. The animated Faces
+  // renderer invalidates the dashboard every 50 ms and may block an overlay
+  // from appearing. A screen switch stops drawing Faces while Power is open.
+  power_menu_ = lv_obj_create(nullptr);
+  lv_obj_set_size(power_menu_, board::kDisplayWidth, board::kDisplayHeight);
+  lv_obj_center(power_menu_);
+  lv_obj_set_style_bg_color(power_menu_, lv_color_hex(0x080F16), 0);
+  lv_obj_set_style_bg_opa(power_menu_, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(power_menu_, 0, 0);
+  lv_obj_set_style_pad_all(power_menu_, 0, 0);
+  lv_obj_remove_flag(power_menu_, LV_OBJ_FLAG_SCROLLABLE);
+  lv_obj_add_flag(power_menu_, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_add_event_cb(power_menu_, &Ui::power_menu_event_cb, LV_EVENT_ALL, this);
+  lv_obj_t* power_title = lv_label_create(power_menu_);
+  lv_label_set_text(power_title, "Power");
+  lv_obj_set_style_text_font(power_title, &lv_font_montserrat_24, 0);
+  lv_obj_set_style_text_color(power_title, lv_color_hex(0xFFFFFF), 0);
+  lv_obj_align(power_title, LV_ALIGN_TOP_MID, 0, 89);
+  power_menu_status_ = lv_label_create(power_menu_);
+  lv_label_set_text(power_menu_status_, "Choose an action");
+  lv_obj_set_width(power_menu_status_, 300);
+  lv_obj_set_style_text_font(power_menu_status_, &lv_font_montserrat_18, 0);
+  lv_obj_set_style_text_align(power_menu_status_, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_text_color(power_menu_status_, lv_color_hex(0xA5C9D3), 0);
+  lv_obj_align(power_menu_status_, LV_ALIGN_TOP_MID, 0, 137);
+  auto power_button = [&](const char* label, int y, uint32_t color, lv_event_cb_t callback) {
+    lv_obj_t* btn = lv_button_create(power_menu_);
+    lv_obj_set_size(btn, 254, 57);
+    lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, y);
+    lv_obj_set_style_radius(btn, 20, 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(color), 0);
+    lv_obj_set_style_border_width(btn, 1, 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(0x40CADA), 0);
+    lv_obj_add_flag(btn, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_t* caption = lv_label_create(btn);
+    lv_label_set_text(caption, label);
+    lv_obj_set_style_text_font(caption, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(caption, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_center(caption);
+    lv_obj_add_event_cb(btn, callback, LV_EVENT_CLICKED, this);
+  };
+  power_button("Restart", 194, 0x0A697D, [](lv_event_t* e) {
+    static_cast<Ui*>(lv_event_get_user_data(e))->queue_power_action_locked(
+        DevicePowerAction::kRestart);
+  });
+  power_button("Shut Down", 264, 0x8D3948, [](lv_event_t* e) {
+    static_cast<Ui*>(lv_event_get_user_data(e))->queue_power_action_locked(
+        DevicePowerAction::kShutdown);
+  });
+  lv_obj_t* power_hint = lv_label_create(power_menu_);
+  lv_label_set_text(power_hint, LV_SYMBOL_UP " Swipe up to exit");
+  lv_obj_set_style_text_font(power_hint, &lv_font_montserrat_18, 0);
+  lv_obj_set_style_text_color(power_hint, lv_color_hex(0xA5C9D3), 0);
+  lv_obj_align(power_hint, LV_ALIGN_TOP_MID, 0, 351);
+  // Handle PWR requests inside LVGL's own worker. The animated face can
+  // keep LVGL's mutex busy, so the main task must not wait for that lock.
+  lv_timer_create([](lv_timer_t* timer) {
+    auto* ui = static_cast<Ui*>(lv_timer_get_user_data(timer));
+    if (!ui->power_menu_open_pending_.exchange(false, std::memory_order_relaxed)) return;
+    if (ui->power_menu_active_.load(std::memory_order_relaxed)) return;
+    ui->device_power_action_requested_.store(static_cast<uint8_t>(DevicePowerAction::kNone));
+    ui->power_touch_active_ = false;
+    ui->power_touch_swiped_ = false;
+    lv_label_set_text(ui->power_menu_status_, "Choose an action");
+    ui->power_menu_active_.store(true, std::memory_order_relaxed);
+    lv_screen_load(ui->power_menu_);
+    ESP_LOGI(kTag, "Power screen shown by LVGL worker (from %s)",
+             ui->face_home_visible_ ? "Faces" : "Bambu/menu");
+  }, 100, this);
+
   lv_obj_add_event_cb(screen_, &Ui::screen_event_cb, LV_EVENT_ALL, this);
   lv_obj_update_layout(pager_);
   lv_obj_scroll_to_view(page1_, LV_ANIM_OFF);
@@ -3341,6 +3428,72 @@ esp_err_t Ui::build_dashboard() {
   update_portal_access_visuals_locked();
 
   return ESP_OK;
+}
+
+bool Ui::open_power_menu() {
+  if (!initialized_ || power_menu_ == nullptr) return false;
+  // Wake a paused display from the main task, then defer all LVGL changes to
+  // its own timer. This works even while Faces is drawing a frame.
+  request_wake_display();
+  power_menu_open_pending_.store(true, std::memory_order_relaxed);
+  ESP_LOGI(kTag, "Power screen requested");
+  return true;
+}
+
+void Ui::show_power_off_failure() {
+  if (!initialized_ || power_menu_ == nullptr) return;
+  LvglLockGuard lock(500, "power_off_failure");
+  if (!lock.locked()) return;
+  lv_label_set_text(power_menu_status_, "Power remains on (USB?)");
+}
+
+void Ui::queue_power_action_locked(DevicePowerAction action) {
+  if (!power_menu_active_.load() || power_touch_swiped_) return;
+  lv_label_set_text(power_menu_status_, action == DevicePowerAction::kRestart
+      ? "Restarting..." : "Shutting down...");
+  device_power_action_requested_.store(static_cast<uint8_t>(action));
+}
+
+void Ui::close_power_menu_locked() {
+  power_touch_active_ = false;
+  // Restore the existing dashboard tree; it remembers the exact open page.
+  if (screen_ != nullptr) lv_screen_load(screen_);
+  power_menu_active_.store(false);
+}
+
+void Ui::power_menu_event_cb(lv_event_t* event) {
+  auto* ui = static_cast<Ui*>(lv_event_get_user_data(event));
+  if (ui != nullptr) ui->handle_power_menu_event(event);
+}
+
+void Ui::handle_power_menu_event(lv_event_t* event) {
+  if (!power_menu_active_.load()) return;
+  const lv_event_code_t code = lv_event_get_code(event);
+  if (code == LV_EVENT_PRESS_LOST) {
+    power_touch_active_ = false;
+    return;
+  }
+  if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING &&
+      code != LV_EVENT_RELEASED) return;
+  lv_indev_t* indev = lv_indev_get_act();
+  if (indev == nullptr) return;
+  lv_point_t pt{};
+  lv_indev_get_point(indev, &pt);
+  if (code == LV_EVENT_PRESSED) {
+    power_touch_active_ = true;
+    power_touch_start_x_ = pt.x;
+    power_touch_start_y_ = pt.y;
+    return;
+  }
+  if (!power_touch_active_) return;
+  const int dx = static_cast<int>(pt.x - power_touch_start_x_);
+  const int dy = static_cast<int>(power_touch_start_y_ - pt.y);
+  if (dy >= 50 && dy > std::abs(dx) + 16) {
+    power_touch_swiped_ = true;
+    close_power_menu_locked();  // Reveals the exact page/menu that was behind it.
+    return;
+  }
+  if (code == LV_EVENT_RELEASED) power_touch_active_ = false;
 }
 
 void Ui::show_faces_home_locked() {
@@ -3388,11 +3541,27 @@ void Ui::update_print_screen_focus_locked(const PrinterSnapshot& snapshot) {
        lifecycle == PrintLifecycleState::kPaused);
   const uint32_t now_ms = lv_tick_get();
 
+  // The preparing stage can open Bambu before the print-start sound fires.
+  // If Faces is brought forward during preparation, reopen Bambu once when
+  // printing truly begins. Keep the latch through pause/reconnect so a
+  // later manual return to Faces is respected.
+  if (lifecycle == PrintLifecycleState::kPreparing ||
+      lifecycle == PrintLifecycleState::kIdle || finished_or_failed) {
+    print_started_view_shown_ = false;
+  }
+  const bool first_printing_frame =
+      lifecycle == PrintLifecycleState::kPrinting && !print_started_view_shown_;
+  if (lifecycle == PrintLifecycleState::kPrinting) {
+    print_started_view_shown_ = true;
+  }
+
   if (job_running) {
     // A real print takes priority over the idle timeout, even when paused.
-    // Only open the dashboard at the start of a new job; manual swipes work.
     idle_printer_timer_active_ = false;
-    if (!auto_print_running_) {
+    if (!auto_print_running_ || (first_printing_frame && face_home_visible_)) {
+      if (first_printing_frame && face_home_visible_) {
+        ESP_LOGI(kTag, "Print started: returning from Faces to Bambu dashboard");
+      }
       auto_print_running_ = true;
       show_printer_home_locked();
     }
@@ -3788,6 +3957,7 @@ void Ui::handle_pager_event(lv_event_t* event) {
 }
 
 void Ui::handle_screen_event(lv_event_t* event) {
+  if (power_menu_active_.load(std::memory_order_relaxed)) return;
   const lv_event_code_t code = lv_event_get_code(event);
   if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING && code != LV_EVENT_RELEASED &&
       code != LV_EVENT_PRESS_LOST && code != LV_EVENT_LONG_PRESSED) {
@@ -4136,6 +4306,20 @@ void Ui::v13_face_timer_cb(lv_timer_t* timer) {
 }
 
 void Ui::update_v13_face_tick() {
+  // Power has its own LVGL screen, so no z-order changes are needed here.
+  // Close an untouched settings menu after 60 seconds. The LVGL display
+  // tracks even brief taps and swipes on nested controls, so every menu
+  // page resets the timeout without adding handlers to each button.
+  if (v13_menu_ != nullptr && !lv_obj_has_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN)) {
+    constexpr uint32_t kMenuInactivityTimeoutMs = 60000U;
+    const uint32_t elapsed_since_open =
+        static_cast<uint32_t>(lv_tick_get() - v13_menu_open_tick_ms_);
+    if (elapsed_since_open >= kMenuInactivityTimeoutMs &&
+        lv_display_get_inactive_time(display_) >= kMenuInactivityTimeoutMs) {
+      close_v13_menu();  // Reveals whichever Faces/printer page was underneath.
+      return;
+    }
+  }
   if (v13_clock_time_label_ != nullptr && v13_clock_date_label_ != nullptr &&
       v13_menu_ != nullptr && !lv_obj_has_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN)) {
     const time_t now = time(nullptr);
@@ -4143,8 +4327,8 @@ void Ui::update_v13_face_tick() {
     localtime_r(&now, &local_time);
     char time_text[32] = {};
     char date_text[48] = {};
-    strftime(time_text, sizeof(time_text), "%I:%M %p", &local_time);
-    strftime(date_text, sizeof(date_text), "%A, %B %d", &local_time);
+    strftime(time_text, sizeof(time_text), v13_preferences_.clock_24_hour ? "%H:%M" : "%I:%M %p", &local_time);
+    strftime(date_text, sizeof(date_text), "%a, %b %d", &local_time);
     set_label_text_if_changed(v13_clock_time_label_, now > 1700000000 ? time_text : "Syncing time...");
     set_label_text_if_changed(v13_clock_date_label_, now > 1700000000 ? date_text : "Connect to Wi-Fi for time");
   }
@@ -4170,15 +4354,11 @@ void Ui::update_v13_face_tick() {
 
 void Ui::refresh_v13_face() {
   if (!face_renderer_) return;
-  constexpr uint32_t colors[] = {
-      0x00FFFF, 0x1688FF, 0x33DD66, 0xFF9B31, 0xB66BFF,
-      0xFF4141, 0xFFFFFF, 0xFF7DBC, 0xFFDD36
-  };
   constexpr const char* faces[] = {
       "neutral", "sad", "happy", "glossy", "sleepy", "surprised", "look_around"
   };
   v13_preferences_.clamp();
-  face_renderer_->SetColor(colors[static_cast<uint8_t>(v13_preferences_.face_color)],
+  face_renderer_->SetColor(kV13FaceColors[static_cast<uint8_t>(v13_preferences_.face_color)],
                            v13_preferences_.match_heart_color);
   face_renderer_->SetEmotion(faces[static_cast<uint8_t>(v13_preferences_.main_face)]);
 }
@@ -4194,36 +4374,46 @@ void Ui::close_v13_menu() {
 
 void Ui::open_v13_menu(int page) {
   if (!v13_menu_) return;
+  v13_menu_open_tick_ms_ = lv_tick_get();
   v13_clock_time_label_ = nullptr;
   v13_clock_date_label_ = nullptr;
   lv_obj_clean(v13_menu_);
   lv_obj_scroll_to_y(v13_menu_, 0, LV_ANIM_OFF);
   lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_OFF);
-  const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About", "Idle Face", "Clock", "Sound", "Sort Menu"};
-  const int safe_page = std::clamp(page, 0, 8);
+  const char* titles[] = {"Control Center", "Face Options", "Display", "Wi-Fi", "About", "Idle Face", "Clock", "Sound", "Sort Menu", "Face Color"};
+  const int safe_page = std::clamp(page, 0, 9);
   lv_obj_t* title = lv_label_create(v13_menu_);
   lv_label_set_text(title, titles[safe_page]);
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
-  lv_obj_set_style_text_font(title, &lv_font_montserrat_32, 0);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 28);
+  // Keep even the longest menu title within the narrow upper round edge.
+  lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 34);
 
   auto button = [&](const char* caption, int y, lv_event_cb_t callback) {
+    // Below y=370 the circular bezel narrows sharply. A full-width button
+    // looks fine in LVGL's square layout but gets cut off on the real panel.
+    const bool footer = y >= 370;
     lv_obj_t* b = lv_button_create(v13_menu_);
-    lv_obj_set_size(b, 284, 43);
-    lv_obj_align(b, LV_ALIGN_TOP_MID, 0, y);
+    lv_obj_set_size(b, footer ? 220 : 284, footer ? 38 : 43);
+    lv_obj_align(b, LV_ALIGN_TOP_MID, 0, footer ? std::min(y, 385) : y);
     lv_obj_set_style_radius(b, 16, 0);
     lv_obj_set_style_bg_color(b, lv_color_hex(0x10424D), 0);
     lv_obj_set_style_border_width(b, 1, 0);
     lv_obj_set_style_border_color(b, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_pad_all(b, 0, 0);
     lv_obj_t* label = lv_label_create(b);
     lv_label_set_text(label, caption);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(label,
+                               footer ? &lv_font_montserrat_18 : &lv_font_montserrat_20, 0);
     lv_obj_center(label);
     lv_obj_add_event_cb(b, callback, LV_EVENT_CLICKED, this);
   };
   auto label = [&](const char* caption, int y) {
     lv_obj_t* l = lv_label_create(v13_menu_);
+    lv_obj_set_width(l, 320);
+    lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
     lv_label_set_text(l, caption);
+    lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(l, lv_color_hex(0xBBD4DA), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_18, 0);
     lv_obj_align(l, LV_ALIGN_TOP_MID, 0, y);
@@ -4334,27 +4524,21 @@ void Ui::open_v13_menu(int page) {
     nav_card("About", 6, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
     });
-    // Two fixed touch targets in the round-safe footer.
-    auto menu_footer = [&](const char* caption, int x, lv_event_cb_t callback) {
-      lv_obj_t* control = lv_button_create(v13_menu_);
-      lv_obj_set_size(control, 131, 42);
-      lv_obj_align(control, LV_ALIGN_TOP_MID, x, 364);
-      lv_obj_set_style_radius(control, 20, 0);
-      lv_obj_set_style_bg_color(control, lv_color_hex(0x10424D), 0);
-      lv_obj_set_style_border_width(control, 1, 0);
-      lv_obj_set_style_border_color(control, lv_color_hex(0x29DBE9), 0);
-      lv_obj_t* caption_label = lv_label_create(control);
-      lv_label_set_text(caption_label, caption);
-      lv_obj_set_style_text_font(caption_label, &lv_font_montserrat_18, 0);
-      lv_obj_center(caption_label);
-      lv_obj_add_event_cb(control, callback, LV_EVENT_CLICKED, this);
-    };
-    menu_footer("Restart", -73, [](lv_event_t* e) {
-      show_device_action_confirmation(lv_obj_get_parent(lv_event_get_target_obj(e)), false);
-    });
-    menu_footer(LV_SYMBOL_LEFT " Back", 73, [](lv_event_t* e) {
+    // Restart and shutdown live in the physical PWR-key menu.
+    lv_obj_t* back = lv_button_create(v13_menu_);
+    lv_obj_set_size(back, 218, 42);
+    lv_obj_align(back, LV_ALIGN_TOP_MID, 0, 364);
+    lv_obj_set_style_radius(back, 20, 0);
+    lv_obj_set_style_bg_color(back, lv_color_hex(0x10424D), 0);
+    lv_obj_set_style_border_width(back, 1, 0);
+    lv_obj_set_style_border_color(back, lv_color_hex(0x29DBE9), 0);
+    lv_obj_t* back_label = lv_label_create(back);
+    lv_label_set_text(back_label, LV_SYMBOL_LEFT " Back");
+    lv_obj_set_style_text_font(back_label, &lv_font_montserrat_18, 0);
+    lv_obj_center(back_label);
+    lv_obj_add_event_cb(back, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->close_v13_menu();
-    });
+    }, LV_EVENT_CLICKED, this);
   } else if (safe_page == 8) {
     // Focused sort: a round-screen-safe scrolling list with 52px arrow targets.
     lv_obj_remove_flag(v13_menu_, LV_OBJ_FLAG_SCROLLABLE);
@@ -4469,6 +4653,70 @@ void Ui::open_v13_menu(int page) {
     footer("Back", 73, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
+  } else if (safe_page == 9) {
+    // Three-second hold on Faces opens a quick color picker. Use the same
+    // stored option and palette as Face Options, so both menus stay in sync.
+    for (uint8_t index = 0; index < 9; ++index) {
+      const int column = index % 3;
+      const int row = index / 3;
+      const bool selected = static_cast<uint8_t>(v13_preferences_.face_color) == index;
+      lv_obj_t* tile = lv_button_create(v13_menu_);
+      lv_obj_set_size(tile, 112, 88);
+      lv_obj_align(tile, LV_ALIGN_TOP_MID, (column - 1) * 120, 99 + row * 96);
+      lv_obj_set_style_radius(tile, 16, 0);
+      lv_obj_set_style_bg_color(tile, lv_color_hex(0x122C37), 0);
+      lv_obj_set_style_border_width(tile, selected ? 3 : 1, 0);
+      lv_obj_set_style_border_color(tile,
+          lv_color_hex(selected ? 0xFFFFFF : 0x3B5965), 0);
+      lv_obj_set_style_pad_all(tile, 0, 0);
+      lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
+
+      lv_obj_t* swatch = lv_obj_create(tile);
+      lv_obj_set_size(swatch, 35, 35);
+      lv_obj_align(swatch, LV_ALIGN_TOP_MID, 0, 8);
+      lv_obj_set_style_radius(swatch, LV_RADIUS_CIRCLE, 0);
+      lv_obj_set_style_bg_color(swatch, lv_color_hex(kV13FaceColors[index]), 0);
+      lv_obj_set_style_bg_opa(swatch, LV_OPA_COVER, 0);
+      lv_obj_set_style_border_width(swatch, 0, 0);
+      lv_obj_set_style_pad_all(swatch, 0, 0);
+      lv_obj_clear_flag(swatch, LV_OBJ_FLAG_CLICKABLE);
+      lv_obj_clear_flag(swatch, LV_OBJ_FLAG_SCROLLABLE);
+
+      lv_obj_t* name = lv_label_create(tile);
+      lv_label_set_text(name, kV13FaceColorNames[index]);
+      lv_obj_set_style_text_font(name, &lv_font_montserrat_18, 0);
+      lv_obj_set_style_text_color(name, lv_color_hex(0xE9FFFF), 0);
+      lv_obj_align(name, LV_ALIGN_BOTTOM_MID, 0, -7);
+      lv_obj_add_event_cb(tile, [](lv_event_t* e) {
+        auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+        if (ui == nullptr) return;
+        // The title is child 0; the nine color tiles follow in palette order.
+        const uint32_t child_index = lv_obj_get_index(lv_event_get_target_obj(e));
+        if (child_index < 1 || child_index > 9) return;
+        ui->v13_preferences_.face_color = static_cast<V13FaceColor>(child_index - 1);
+        ui->refresh_v13_face();
+        save_v13_menu_preferences(ui->v13_preferences_);
+        ui->close_v13_menu();
+      }, LV_EVENT_CLICKED, this);
+    }
+    // The round 466-pixel panel clips wide buttons near the bottom edge.
+    // Keep this action narrower and higher than the standard menu buttons.
+    lv_obj_t* back_button = lv_button_create(v13_menu_);
+    lv_obj_set_size(back_button, 220, 37);
+    lv_obj_align(back_button, LV_ALIGN_TOP_MID, 0, 385);
+    lv_obj_set_style_radius(back_button, 18, 0);
+    lv_obj_set_style_bg_color(back_button, lv_color_hex(0x10424D), 0);
+    lv_obj_set_style_border_width(back_button, 1, 0);
+    lv_obj_set_style_border_color(back_button, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_pad_all(back_button, 0, 0);
+    lv_obj_clear_flag(back_button, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* back_label = lv_label_create(back_button);
+    lv_label_set_text(back_label, "Back to Faces");
+    lv_obj_set_style_text_font(back_label, &lv_font_montserrat_18, 0);
+    lv_obj_center(back_label);
+    lv_obj_add_event_cb(back_button, [](lv_event_t* e) {
+      static_cast<Ui*>(lv_event_get_user_data(e))->close_v13_menu();
+    }, LV_EVENT_CLICKED, this);
   } else if (safe_page == 1) {
     label("Main face mode", 78);
     dropdown("Randomize\nMood\nSingle", 104,
@@ -4550,25 +4798,58 @@ void Ui::open_v13_menu(int page) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   } else if (safe_page == 6) {
-    time_t now = time(nullptr);
+    // Clock settings use the persisted web timezone. SNTP owns UTC time.
+    const time_t now = time(nullptr);
     struct tm local_time{};
     localtime_r(&now, &local_time);
     char time_text[32] = {};
     char date_text[48] = {};
-    strftime(time_text, sizeof(time_text), "%I:%M %p", &local_time);
-    strftime(date_text, sizeof(date_text), "%A, %B %d", &local_time);
+    strftime(time_text, sizeof(time_text),
+             v13_preferences_.clock_24_hour ? "%H:%M" : "%I:%M %p", &local_time);
+    strftime(date_text, sizeof(date_text), "%a, %b %d", &local_time);
     lv_obj_t* clock_time = lv_label_create(v13_menu_);
     lv_label_set_text(clock_time, now > 1700000000 ? time_text : "Syncing time...");
     lv_obj_set_style_text_font(clock_time, &dosis_40, 0);
     lv_obj_set_style_text_color(clock_time, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_align(clock_time, LV_ALIGN_CENTER, 0, -36);
+    lv_obj_align(clock_time, LV_ALIGN_CENTER, 0, -119);
     lv_obj_t* clock_date = lv_label_create(v13_menu_);
-    lv_label_set_text(clock_date, now > 1700000000 ? date_text : "Connect to Wi-Fi for time");
+    lv_label_set_text(clock_date, now > 1700000000 ? date_text : "Sync from Web Config");
+    lv_obj_set_style_text_font(clock_date, &lv_font_montserrat_18, 0);
     lv_obj_set_style_text_color(clock_date, lv_color_hex(0xD8E8EA), 0);
-    lv_obj_align(clock_date, LV_ALIGN_CENTER, 0, 18);
+    lv_obj_align(clock_date, LV_ALIGN_CENTER, 0, -71);
     v13_clock_time_label_ = clock_time;
     v13_clock_date_label_ = clock_date;
-    button("Back", 375, [](lv_event_t* e) {
+    label("Time Zone", 195);
+    const std::string saved_zone = sound_config_store_
+        ? sound_config_store_->load_timezone_iana() : "";
+    size_t selected_zone = kClockZoneCount;  // Keep other web zones unchanged.
+    for (size_t i = 0; i < kClockZoneCount; ++i) {
+      if (saved_zone == kClockZones[i] || (saved_zone.empty() && i == 0)) {
+        selected_zone = i;
+        break;
+      }
+    }
+    dropdown(kClockZoneOptions, 223, static_cast<int>(selected_zone),
+             [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      const uint16_t selected = lv_dropdown_get_selected(lv_event_get_target_obj(e));
+      if (selected >= kClockZoneCount || !ui->sound_config_store_) return;
+      const std::string zone = kClockZones[selected];
+      if (ui->sound_config_store_->save_timezone_iana(zone) == ESP_OK) {
+        time_sync::set_timezone_iana(zone);
+        // The clock timer repaints this label without destroying the picker.
+      }
+    });
+    label("Clock Format", 285);
+    dropdown("12-hour\n24-hour", 311, v13_preferences_.clock_24_hour ? 1 : 0,
+             [](lv_event_t* e) {
+      auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
+      ui->v13_preferences_.clock_24_hour =
+          lv_dropdown_get_selected(lv_event_get_target_obj(e)) == 1;
+      save_v13_menu_preferences(ui->v13_preferences_);
+      // Repaint on the next clock tick; keep the active dropdown alive.
+    });
+    button("Back", 383, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   } else if (safe_page == 3) {
@@ -4621,30 +4902,59 @@ void Ui::face_event_cb(lv_event_t* event) {
 void Ui::handle_face_event(lv_event_t* event) {
   if (!face_home_visible_) return;
   const lv_event_code_t code = lv_event_get_code(event);
-  if (code != LV_EVENT_PRESSED && code != LV_EVENT_RELEASED) return;
+  if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING &&
+      code != LV_EVENT_RELEASED && code != LV_EVENT_PRESS_LOST) return;
+
+  if (code == LV_EVENT_PRESS_LOST) {
+    face_touch_active_ = false;
+    return;
+  }
   lv_indev_t* indev = lv_indev_get_act();
   if (!indev) return;
   lv_point_t point{};
   lv_indev_get_point(indev, &point);
+
   if (code == LV_EVENT_PRESSED) {
+    face_touch_active_ = true;
+    face_touch_moved_ = false;
+    face_touch_start_tick_ms_ = lv_tick_get();
     face_touch_start_x_ = point.x;
     face_touch_start_y_ = point.y;
-    v13_face_options_.Activity(lv_tick_get());
+    v13_face_options_.Activity(face_touch_start_tick_ms_);
     note_activity(false);
-  } else {
-    const int dx = static_cast<int>(point.x - face_touch_start_x_);
-    const int dy = static_cast<int>(face_touch_start_y_ - point.y);
-    if (dy >= kSwipeThresholdPx &&
-        dy > std::abs(dx) + kGestureAxisLockMarginPx) {
-      // Bottom-to-top toggles Faces Home to the printer dashboard.
-      show_printer_home_locked();
-    } else if (dy <= -kSwipeThresholdPx &&
-               -dy > std::abs(dx) + kGestureAxisLockMarginPx) {
-      // Keep top-to-bottom as the Control Center gesture.
-      open_v13_menu(0);
-    }
-    // Left/right swipes never open the menu or switch between apps.
+    return;
   }
+  if (!face_touch_active_) return;
+
+  const int dx = static_cast<int>(point.x - face_touch_start_x_);
+  const int dy = static_cast<int>(face_touch_start_y_ - point.y);
+  if (code == LV_EVENT_PRESSING) {
+    // Any swipe cancels the long hold, even if the finger comes back.
+    if (std::abs(dx) > kFaceColorHoldMaxTravelPx ||
+        std::abs(dy) > kFaceColorHoldMaxTravelPx) {
+      face_touch_moved_ = true;
+    }
+    if (!face_touch_moved_ &&
+        static_cast<uint32_t>(lv_tick_get() - face_touch_start_tick_ms_) >=
+            kFaceColorHoldMs) {
+      face_touch_active_ = false;  // Ignore the release after opening the menu.
+      note_activity(true);
+      open_v13_menu(9);
+    }
+    return;
+  }
+
+  face_touch_active_ = false;
+  if (dy >= kSwipeThresholdPx &&
+      dy > std::abs(dx) + kGestureAxisLockMarginPx) {
+    // Bottom-to-top toggles Faces Home to the printer dashboard.
+    show_printer_home_locked();
+  } else if (dy <= -kSwipeThresholdPx &&
+             -dy > std::abs(dx) + kGestureAxisLockMarginPx) {
+    // Keep top-to-bottom as the Control Center gesture.
+    open_v13_menu(0);
+  }
+  // Left/right swipes never open the menu or switch between apps.
 }
 
 void Ui::screen_event_cb(lv_event_t* event) {

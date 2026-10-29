@@ -25,6 +25,12 @@ enum class ScreenPowerMode : uint8_t {
   kOff,
 };
 
+enum class DevicePowerAction : uint8_t {
+  kNone,
+  kRestart,
+  kShutdown,
+};
+
 class Ui {
  public:
   // Page layout (left → right):
@@ -103,6 +109,18 @@ class Ui {
   void update_printer_cards(const std::vector<PrinterCardInfo>& cards);
   int consume_printer_switch_request();
   void request_wake_display();
+  bool open_power_menu();
+  void show_power_off_failure();
+  bool is_power_menu_active() const {
+    return power_menu_active_.load(std::memory_order_relaxed);
+  }
+  DevicePowerAction consume_device_power_action_request() {
+    return static_cast<DevicePowerAction>(
+        device_power_action_requested_.exchange(static_cast<uint8_t>(DevicePowerAction::kNone)));
+  }
+  bool has_device_power_action_request() const {
+    return device_power_action_requested_.load() != static_cast<uint8_t>(DevicePowerAction::kNone);
+  }
 
  private:
   esp_err_t build_dashboard();
@@ -132,6 +150,10 @@ class Ui {
   void handle_pager_event(lv_event_t* event);
   void handle_screen_event(lv_event_t* event);
   void handle_face_event(lv_event_t* event);
+  void handle_power_menu_event(lv_event_t* event);
+  void queue_power_action_locked(DevicePowerAction action);
+  void close_power_menu_locked();
+  static void power_menu_event_cb(lv_event_t* event);
   void show_faces_home_locked();
   void show_printer_home_locked();
   void update_print_screen_focus_locked(const PrinterSnapshot& snapshot);
@@ -176,6 +198,15 @@ class Ui {
   lv_obj_t* pager_ = nullptr;
   lv_obj_t* face_home_ = nullptr;
   lv_obj_t* v13_menu_ = nullptr;
+  lv_obj_t* power_menu_ = nullptr;
+  lv_obj_t* power_menu_status_ = nullptr;
+  std::atomic<bool> power_menu_active_{false};
+  std::atomic<bool> power_menu_open_pending_{false};
+  std::atomic<uint8_t> device_power_action_requested_{static_cast<uint8_t>(DevicePowerAction::kNone)};
+  lv_coord_t power_touch_start_x_ = 0;
+  lv_coord_t power_touch_start_y_ = 0;
+  bool power_touch_active_ = false;
+  bool power_touch_swiped_ = false;
   ConfigStore* sound_config_store_ = nullptr;
   AudioNotifier* sound_notifier_ = nullptr;
   lv_obj_t* v13_clock_time_label_ = nullptr;
@@ -183,13 +214,18 @@ class Ui {
   std::unique_ptr<VideoFace> face_renderer_;
   FaceOptions v13_face_options_{};
   lv_timer_t* v13_face_timer_ = nullptr;
+  uint32_t v13_menu_open_tick_ms_ = 0;
   int v13_last_face_ = -1;
   V13MenuPreferences v13_preferences_{};
   uint8_t v13_sort_selected_ = 0;
   bool face_home_visible_ = false;
   lv_coord_t face_touch_start_x_ = 0;
   lv_coord_t face_touch_start_y_ = 0;
+  uint32_t face_touch_start_tick_ms_ = 0;
+  bool face_touch_active_ = false;
+  bool face_touch_moved_ = false;
   bool auto_print_running_ = false;
+  bool print_started_view_shown_ = false;
   bool idle_printer_timer_active_ = false;
   uint32_t idle_printer_since_ms_ = 0;
   std::atomic<bool> print_screen_hold_active_{false};

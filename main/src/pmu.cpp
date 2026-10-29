@@ -9,6 +9,9 @@
 #include "driver/i2c_master.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 namespace printsphere {
 
@@ -16,9 +19,13 @@ namespace {
 
 constexpr char kTag[] = "printsphere.pmu";
 constexpr uint32_t kI2cTimeoutMs = 1000;
+constexpr int64_t kPowerMenuHoldUs = 2000000;
+constexpr uint32_t kPowerKeyPollMs = 80;
 
 XPowersPMU s_pmu;
 i2c_master_dev_handle_t s_pmu_device = nullptr;
+esp_io_expander_handle_t s_power_key_expander = nullptr;
+bool s_power_key_input_ready = false;
 
 int pmu_register_read(uint8_t, uint8_t reg_addr, uint8_t* data, uint8_t len) {
   if (s_pmu_device == nullptr) {
@@ -86,14 +93,115 @@ esp_err_t PmuManager::initialize() {
 
   s_pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
   s_pmu.clearIrqStatus();
+  // The PMU also reports a PWR-key hold. Use it as a second input path.
+  s_pmu.setIrqLevelTime(XPOWERS_AXP2101_IRQ_TIME_2S);
+  if (!s_pmu.enableIRQ(XPOWERS_AXP2101_PKEY_LONG_IRQ)) {
+    ESP_LOGW(kTag, "Could not enable AXP2101 long-press fallback");
+  }
   s_pmu.setPrechargeCurr(XPOWERS_AXP2101_PRECHARGE_50MA);
   s_pmu.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_400MA);
   s_pmu.setChargerTerminationCurr(XPOWERS_AXP2101_CHG_ITERM_25MA);
   s_pmu.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2);
+  // Keep the hardware emergency shutdown available on an 8-second PWR hold.
+  if (!s_pmu.setPowerKeyPressOffTime(XPOWERS_POWEROFF_8S)) {
+    ESP_LOGW(kTag, "Could not configure 8-second hardware power-off");
+  }
 
   initialized_ = true;
+  s_power_key_expander = bsp_io_expander_init();
+  s_power_key_input_ready = s_power_key_expander != nullptr &&
+      esp_io_expander_set_dir(s_power_key_expander, IO_EXPANDER_PIN_NUM_4,
+                              IO_EXPANDER_INPUT) == ESP_OK;
+  ESP_LOGI(kTag, "PWR monitor v2: EXIO4=%s, AXP2101 long-key IRQ enabled",
+           s_power_key_input_ready ? "ready" : "unavailable");
+  // Run even if EXIO4 is unavailable; the independent PMU IRQ can still work.
+  if (xTaskCreate(&PmuManager::power_key_poll_task, "sykick_pwr_key", 4096, this,
+                  tskIDLE_PRIORITY + 1, nullptr) != pdPASS) {
+    ESP_LOGE(kTag, "PWR key monitor task could not start");
+  }
   ESP_LOGI(kTag, "PMU ready (AXP2101)");
   return ESP_OK;
+}
+
+void PmuManager::power_key_poll_task(void* context) {
+  auto* manager = static_cast<PmuManager*>(context);
+  bool first_release_seen = false;
+  bool last_pressed = false;
+  bool hold_reported = false;
+  int64_t pressed_since_us = 0;
+  int64_t last_good_sample_us = esp_timer_get_time();
+  int64_t last_error_log_us = 0;
+  uint32_t loop_counter = 0;
+  for (;;) {
+    const int64_t now_us = esp_timer_get_time();
+    if (s_power_key_input_ready) {
+      uint32_t levels = 0;
+      const esp_err_t result = esp_io_expander_get_level(
+          s_power_key_expander, IO_EXPANDER_PIN_NUM_4, &levels);
+      if (result != ESP_OK) {
+        // Brief bus delays are common under touch/audio load. Allow a gap
+        // shorter than 400ms instead of resetting a valid hold every time.
+        if (now_us - last_good_sample_us > 400000) {
+          pressed_since_us = 0;
+        }
+        if (now_us - last_error_log_us > 5000000) {
+          ESP_LOGW(kTag, "PWR EXIO4 read failed: %s", esp_err_to_name(result));
+          last_error_log_us = now_us;
+        }
+      } else {
+        last_good_sample_us = now_us;
+        const bool pressed = (levels & IO_EXPANDER_PIN_NUM_4) != 0;
+        if (pressed != last_pressed) {
+          ESP_LOGI(kTag, "PWR EXIO4 state: %s (raw=0x%02lx)",
+                   pressed ? "PRESSED" : "RELEASED", static_cast<unsigned long>(levels));
+          last_pressed = pressed;
+        }
+        if (!pressed) {
+          first_release_seen = true;
+          pressed_since_us = 0;
+          hold_reported = false;
+        } else if (first_release_seen && !hold_reported) {
+          if (pressed_since_us == 0) {
+            pressed_since_us = now_us;
+          } else if (now_us - pressed_since_us >= kPowerMenuHoldUs) {
+            hold_reported = true;
+            manager->power_menu_requested_.store(true, std::memory_order_relaxed);
+            ESP_LOGI(kTag, "PWR held 2 seconds on EXIO4; opening menu");
+          }
+        }
+      }
+    }
+
+    // AXP2101 latches a long-key event at 2 seconds. Read only INTSTS2
+    // and require a successful I2C transfer, avoiding false presses on errors.
+    if ((++loop_counter & 1U) == 0U) {
+      uint8_t irq_reg = XPOWERS_AXP2101_INTSTS2;
+      uint8_t irq_bits = 0;
+      const esp_err_t irq_err = i2c_master_transmit_receive(
+          s_pmu_device, &irq_reg, 1, &irq_bits, 1, kI2cTimeoutMs);
+      constexpr uint8_t kLongKeyBit = static_cast<uint8_t>(
+          XPOWERS_AXP2101_PKEY_LONG_IRQ >> 8);
+      if (irq_err == ESP_OK && (irq_bits & kLongKeyBit) != 0) {
+        const uint8_t clear_irq[] = {XPOWERS_AXP2101_INTSTS2, kLongKeyBit};
+        const esp_err_t clear_err = i2c_master_transmit(
+            s_pmu_device, clear_irq, sizeof(clear_irq), kI2cTimeoutMs);
+        if (clear_err == ESP_OK) {
+          manager->power_menu_requested_.store(true, std::memory_order_relaxed);
+          ESP_LOGI(kTag, "PWR held 2 seconds (AXP2101 IRQ); opening menu");
+        }
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(kPowerKeyPollMs));
+  }
+}
+
+esp_err_t PmuManager::power_off() {
+  if (!initialized_) return ESP_ERR_INVALID_STATE;
+  ESP_LOGI(kTag, "Requesting AXP2101 shutdown");
+  s_pmu.shutdown();
+  // If power remains (for example, USB still supplies power), report it.
+  vTaskDelay(pdMS_TO_TICKS(500));
+  return ESP_FAIL;
 }
 
 PowerSnapshot PmuManager::sample() const {
@@ -316,6 +424,10 @@ PowerSnapshot PmuManager::sample() const {
   maybe_log_power_diag(raw, millivolts, battery_voltage, stable_state, inst_state, snapshot);
 
   return snapshot;
+}
+
+esp_err_t PmuManager::power_off() {
+  return ESP_ERR_NOT_SUPPORTED;
 }
 
 }  // namespace printsphere
