@@ -4332,6 +4332,10 @@ void Ui::update_v13_face_tick() {
     set_label_text_if_changed(v13_clock_time_label_, now > 1700000000 ? time_text : "Syncing time...");
     set_label_text_if_changed(v13_clock_date_label_, now > 1700000000 ? date_text : "Connect to Wi-Fi for time");
   }
+  if (v13_battery_status_label_ != nullptr && v13_menu_ != nullptr &&
+      !lv_obj_has_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN)) {
+    refresh_control_center_battery_locked();
+  }
   if (!face_renderer_ || !face_home_visible_) return;
   v13_face_options_.mode = static_cast<int>(v13_preferences_.face_mode);
   v13_face_options_.main = static_cast<int>(v13_preferences_.main_face);
@@ -4350,6 +4354,37 @@ void Ui::update_v13_face_tick() {
     v13_last_face_ = next;
     face_renderer_->SetEmotion(FaceOptions::Names[next]);
   }
+}
+
+void Ui::refresh_control_center_battery_locked() {
+  if (!v13_battery_icon_label_ || !v13_battery_status_label_) return;
+
+  const PrinterSnapshot& power = last_snapshot_;
+  const bool has_battery = power.battery_present;
+  const char* battery_icon = has_battery ? mdi_battery_symbol(power) : kMdiBatteryAlert;
+  char text[48] = {};
+  uint32_t color = 0xE8FFFF;
+  if (has_battery) {
+    const unsigned percent = std::min<unsigned>(power.battery_percent, 100U);
+    const char* status = power.charging ? "Charging"
+        : power.usb_present ? "USB connected" : "On battery";
+    std::snprintf(text, sizeof(text), "%u%% - %s", percent, status);
+    if (power.charging) {
+      color = 0x50E9A4;
+    } else if (percent <= 15U) {
+      color = 0xFF7777;
+    }
+  } else if (power.usb_present) {
+    std::snprintf(text, sizeof(text), "USB power - No battery");
+    color = 0xBBD4DA;
+  } else {
+    std::snprintf(text, sizeof(text), "Battery status unavailable");
+    color = 0xBBD4DA;
+  }
+  set_label_text_if_changed(v13_battery_icon_label_, battery_icon);
+  set_label_text_if_changed(v13_battery_status_label_, text);
+  lv_obj_set_style_text_color(v13_battery_icon_label_, lv_color_hex(color), 0);
+  lv_obj_set_style_text_color(v13_battery_status_label_, lv_color_hex(color), 0);
 }
 
 void Ui::refresh_v13_face() {
@@ -4377,6 +4412,8 @@ void Ui::open_v13_menu(int page) {
   v13_menu_open_tick_ms_ = lv_tick_get();
   v13_clock_time_label_ = nullptr;
   v13_clock_date_label_ = nullptr;
+  v13_battery_icon_label_ = nullptr;
+  v13_battery_status_label_ = nullptr;
   lv_obj_clean(v13_menu_);
   lv_obj_scroll_to_y(v13_menu_, 0, LV_ANIM_OFF);
   lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_OFF);
@@ -4428,11 +4465,32 @@ void Ui::open_v13_menu(int page) {
     lv_obj_add_event_cb(d, cb, LV_EVENT_VALUE_CHANGED, this);
   };
   if (safe_page == 0) {
+    // The power status stays on Control Center only (never over Faces/camera).
+    lv_obj_t* battery_row = lv_obj_create(v13_menu_);
+    lv_obj_set_size(battery_row, 284, 36);
+    lv_obj_align(battery_row, LV_ALIGN_TOP_MID, 0, 70);
+    lv_obj_set_style_radius(battery_row, 16, 0);
+    lv_obj_set_style_bg_color(battery_row, lv_color_hex(0x10343C), 0);
+    lv_obj_set_style_border_color(battery_row, lv_color_hex(0x22535A), 0);
+    lv_obj_set_style_border_width(battery_row, 1, 0);
+    lv_obj_set_style_pad_all(battery_row, 0, 0);
+    lv_obj_remove_flag(battery_row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_flag(battery_row, LV_OBJ_FLAG_SCROLLABLE);
+    v13_battery_icon_label_ = lv_label_create(battery_row);
+    lv_obj_set_style_text_font(v13_battery_icon_label_, &mdi_30, 0);
+    lv_obj_align(v13_battery_icon_label_, LV_ALIGN_LEFT_MID, 11, 0);
+    v13_battery_status_label_ = lv_label_create(battery_row);
+    lv_obj_set_width(v13_battery_status_label_, 226);
+    lv_obj_set_style_text_font(v13_battery_status_label_, &lv_font_montserrat_18, 0);
+    lv_label_set_long_mode(v13_battery_status_label_, LV_LABEL_LONG_CLIP);
+    lv_obj_align(v13_battery_status_label_, LV_ALIGN_LEFT_MID, 52, 0);
+    refresh_control_center_battery_locked();
+
     // Sliders live in Control Center; menu options scroll below them.
-    label("Brightness", 79);
+    label("Brightness", 110);
     lv_obj_t* brightness = lv_slider_create(v13_menu_);
     lv_obj_set_size(brightness, 270, 18);
-    lv_obj_align(brightness, LV_ALIGN_TOP_MID, 0, 111);
+    lv_obj_align(brightness, LV_ALIGN_TOP_MID, 0, 139);
     lv_slider_set_range(brightness, 10, 100);
     lv_obj_set_style_bg_color(brightness, lv_color_hex(0x174752), LV_PART_MAIN);
     lv_obj_set_style_bg_color(brightness, lv_color_hex(0x29DBE9), LV_PART_INDICATOR);
@@ -4444,10 +4502,10 @@ void Ui::open_v13_menu(int page) {
       ui->set_brightness_percent(ui->v13_preferences_.brightness);
       save_v13_menu_preferences(ui->v13_preferences_);
     }, LV_EVENT_RELEASED, this);
-    label("Volume", 148);
+    label("Volume", 160);
     lv_obj_t* volume = lv_slider_create(v13_menu_);
     lv_obj_set_size(volume, 270, 18);
-    lv_obj_align(volume, LV_ALIGN_TOP_MID, 0, 185);
+    lv_obj_align(volume, LV_ALIGN_TOP_MID, 0, 190);
     lv_slider_set_range(volume, 0, 100);
     lv_obj_set_style_bg_color(volume, lv_color_hex(0x174752), LV_PART_MAIN);
     lv_obj_set_style_bg_color(volume, lv_color_hex(0x29DBE9), LV_PART_INDICATOR);
