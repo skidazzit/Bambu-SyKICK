@@ -2260,19 +2260,24 @@ void Ui::apply_snapshot_locked(const PrinterSnapshot& snapshot, bool force_ring_
         camera_slot_initialized_ && camera_blobs_[active_camera_slot_] &&
         !camera_blobs_[active_camera_slot_]->empty();
   } else {
-    if (camera_slot_initialized_ && page3_image_ != nullptr) {
-      lv_image_set_src(page3_image_, nullptr);
+    // Empty snapshots arrive on every app tick when Live View is closed.
+    // Release a real old frame once, not both LVGL image cache entries on
+    // every idle update (which otherwise slows down touch/menu rendering).
+    if (camera_slot_initialized_ || camera_blobs_[0] || camera_blobs_[1]) {
+      if (camera_slot_initialized_ && page3_image_ != nullptr) {
+        lv_image_set_src(page3_image_, nullptr);
+      }
+      lv_image_cache_drop(&camera_image_dscs_[0]);
+      lv_image_cache_drop(&camera_image_dscs_[1]);
+      camera_blobs_[0].reset();
+      camera_blobs_[1].reset();
+      camera_slot_initialized_ = false;
+      active_camera_slot_ = 0;
+      last_camera_width_ = 0;
+      last_camera_height_ = 0;
+      std::memset(&camera_image_dscs_[0], 0, sizeof(camera_image_dscs_[0]));
+      std::memset(&camera_image_dscs_[1], 0, sizeof(camera_image_dscs_[1]));
     }
-    lv_image_cache_drop(&camera_image_dscs_[0]);
-    lv_image_cache_drop(&camera_image_dscs_[1]);
-    camera_blobs_[0].reset();
-    camera_blobs_[1].reset();
-    camera_slot_initialized_ = false;
-    active_camera_slot_ = 0;
-    last_camera_width_ = 0;
-    last_camera_height_ = 0;
-    std::memset(&camera_image_dscs_[0], 0, sizeof(camera_image_dscs_[0]));
-    std::memset(&camera_image_dscs_[1], 0, sizeof(camera_image_dscs_[1]));
     has_camera_image = false;
   }
   camera_image_visible_ = has_camera_image;
@@ -4423,10 +4428,15 @@ void Ui::configure_sound_controls(ConfigStore* store, AudioNotifier* audio) {
 
 void Ui::close_v13_menu() {
   if (v13_menu_) lv_obj_add_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN);
+  // Resume the face only after the overlay is gone.
+  if (face_renderer_) face_renderer_->SetPaused(false);
 }
 
 void Ui::open_v13_menu(int page) {
   if (!v13_menu_) return;
+  // The face is a separate full-screen sibling, hidden by this menu.
+  // Pause its 50 ms redraw timer to free the display worker for touch input.
+  if (face_renderer_) face_renderer_->SetPaused(true);
   v13_menu_open_tick_ms_ = lv_tick_get();
   v13_clock_time_label_ = nullptr;
   v13_clock_date_label_ = nullptr;
