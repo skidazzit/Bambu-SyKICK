@@ -4930,15 +4930,31 @@ void Ui::open_v13_menu(int page) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(1);
     });
   } else if (safe_page == 2) {
-    label("Brightness control is in Control Center", 110);
-    label("Idle brightness and power rules: Web Config", 185);
+    info_card("Adjust screen brightness in Control Center", 104, LV_SYMBOL_SETTINGS);
+    info_card("Volume controls are also in Control Center", 176, LV_SYMBOL_AUDIO);
+    info_card("Set idle dimming and sleep in Web Config", 248, LV_SYMBOL_HOME);
     button("Back", 375, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   } else if (safe_page == 7) {
-    label("Printer alert sounds", 87);
-    lv_obj_t* enabled = lv_switch_create(v13_menu_);
-    lv_obj_align(enabled, LV_ALIGN_TOP_MID, 0, 125);
+    info_card("Alert sound when print status changes", 86, LV_SYMBOL_AUDIO);
+    lv_obj_t* alert_card = lv_obj_create(v13_menu_);
+    lv_obj_set_size(alert_card, 312, 63);
+    lv_obj_align(alert_card, LV_ALIGN_TOP_MID, 0, 166);
+    lv_obj_set_style_bg_color(alert_card, lv_color_hex(0x10343E), 0);
+    lv_obj_set_style_border_color(alert_card, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_border_width(alert_card, 1, 0);
+    lv_obj_set_style_radius(alert_card, 18, 0);
+    lv_obj_set_style_pad_all(alert_card, 0, 0);
+    lv_obj_remove_flag(alert_card, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(alert_card, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t* alert_label = lv_label_create(alert_card);
+    lv_label_set_text(alert_label, LV_SYMBOL_AUDIO "  Printer alerts");
+    lv_obj_set_style_text_font(alert_label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(alert_label, lv_color_hex(0xE9FFFF), 0);
+    lv_obj_align(alert_label, LV_ALIGN_LEFT_MID, 13, 0);
+    lv_obj_t* enabled = lv_switch_create(alert_card);
+    lv_obj_align(enabled, LV_ALIGN_RIGHT_MID, -15, 0);
     if (sound_notifier_ != nullptr && sound_notifier_->enabled()) {
       lv_obj_add_state(enabled, LV_STATE_CHECKED);
     }
@@ -4948,7 +4964,7 @@ void Ui::open_v13_menu(int page) {
       if (ui->sound_notifier_) ui->sound_notifier_->set_enabled(on);
       if (ui->sound_config_store_) ui->sound_config_store_->save_audio_enabled(on);
     }, LV_EVENT_VALUE_CHANGED, this);
-    button("Test sound", 246, [](lv_event_t* e) {
+    button("Test sound", 256, [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       if (ui->sound_notifier_) ui->sound_notifier_->play_test();
     });
@@ -4965,19 +4981,29 @@ void Ui::open_v13_menu(int page) {
     strftime(time_text, sizeof(time_text),
              v13_preferences_.clock_24_hour ? "%H:%M" : "%I:%M %p", &local_time);
     strftime(date_text, sizeof(date_text), "%a, %b %d", &local_time);
-    lv_obj_t* clock_time = lv_label_create(v13_menu_);
+    lv_obj_t* clock_card = lv_obj_create(v13_menu_);
+    lv_obj_set_size(clock_card, 306, 93);
+    lv_obj_align(clock_card, LV_ALIGN_TOP_MID, 0, 84);
+    lv_obj_set_style_radius(clock_card, 20, 0);
+    lv_obj_set_style_bg_color(clock_card, lv_color_hex(0x10343E), 0);
+    lv_obj_set_style_border_width(clock_card, 1, 0);
+    lv_obj_set_style_border_color(clock_card, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_pad_all(clock_card, 0, 0);
+    lv_obj_remove_flag(clock_card, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_flag(clock_card, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* clock_time = lv_label_create(clock_card);
     lv_label_set_text(clock_time, now > 1700000000 ? time_text : "Syncing time...");
     lv_obj_set_style_text_font(clock_time, &dosis_40, 0);
     lv_obj_set_style_text_color(clock_time, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_align(clock_time, LV_ALIGN_CENTER, 0, -119);
-    lv_obj_t* clock_date = lv_label_create(v13_menu_);
+    lv_obj_align(clock_time, LV_ALIGN_TOP_MID, 0, 5);
+    lv_obj_t* clock_date = lv_label_create(clock_card);
     lv_label_set_text(clock_date, now > 1700000000 ? date_text : "Sync from Web Config");
     lv_obj_set_style_text_font(clock_date, &lv_font_montserrat_18, 0);
-    lv_obj_set_style_text_color(clock_date, lv_color_hex(0xD8E8EA), 0);
-    lv_obj_align(clock_date, LV_ALIGN_CENTER, 0, -71);
+    lv_obj_set_style_text_color(clock_date, lv_color_hex(0x29DBE9), 0);
+    lv_obj_align(clock_date, LV_ALIGN_BOTTOM_MID, 0, -8);
     v13_clock_time_label_ = clock_time;
     v13_clock_date_label_ = clock_date;
-    label("Time Zone", 195);
+    label("Time Zone", 190);
     const std::string saved_zone = sound_config_store_
         ? sound_config_store_->load_timezone_iana() : "";
     size_t selected_zone = kClockZoneCount;  // Keep other web zones unchanged.
@@ -4987,7 +5013,7 @@ void Ui::open_v13_menu(int page) {
         break;
       }
     }
-    dropdown(kClockZoneOptions, 223, static_cast<int>(selected_zone),
+    dropdown(kClockZoneOptions, 218, static_cast<int>(selected_zone),
              [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       const uint16_t selected = lv_dropdown_get_selected(lv_event_get_target_obj(e));
@@ -4998,8 +5024,8 @@ void Ui::open_v13_menu(int page) {
         // The clock timer repaints this label without destroying the picker.
       }
     });
-    label("Clock Format", 285);
-    dropdown("12-hour\n24-hour", 311, v13_preferences_.clock_24_hour ? 1 : 0,
+    label("Clock Format", 287);
+    dropdown("12-hour\n24-hour", 316, v13_preferences_.clock_24_hour ? 1 : 0,
              [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       ui->v13_preferences_.clock_24_hour =
@@ -5011,40 +5037,45 @@ void Ui::open_v13_menu(int page) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   } else if (safe_page == 3) {
-    label("Open Web Config using the device's Wi-Fi IP", 110);
-    label(last_snapshot_.wifi_ip.empty() ? "Wi-Fi not connected" :
-          last_snapshot_.wifi_ip.c_str(), 160);
+    info_card(last_snapshot_.wifi_connected ? "Wi-Fi connected" : "Wi-Fi not connected",
+              95, LV_SYMBOL_WIFI);
+    std::string ip_text = last_snapshot_.wifi_ip.empty()
+        ? "IP address not assigned" : "IP: " + last_snapshot_.wifi_ip;
+    info_card(ip_text.c_str(), 169, LV_SYMBOL_SETTINGS);
+    info_card("Open Web Config using this IP on your phone", 243, LV_SYMBOL_HOME);
     button("Back", 375, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   } else {
-    label("Bambu SyKICK - Beta 2", 92);
-    label("ESP32-S3 | AMOLED 1.75 | 466x466", 137);
+    info_card("Bambu SyKICK - Beta firmware", 85, LV_SYMBOL_HOME);
+    info_card("ESP32-S3 | AMOLED 1.75-inch", 149, LV_SYMBOL_SETTINGS);
     char memory_text[64] = {};
     std::snprintf(memory_text, sizeof(memory_text),
-                  "Free RAM: %lu KB | PSRAM: %lu KB",
+                  "RAM: %lu KB  |  PSRAM: %lu KB",
                   static_cast<unsigned long>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024U),
                   static_cast<unsigned long>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024U));
-    label(memory_text, 187);
-    label(last_snapshot_.wifi_ip.empty() ? "IP: Not connected" :
-          last_snapshot_.wifi_ip.c_str(), 242);
+    info_card(memory_text, 213, LV_SYMBOL_DRIVE);
+    std::string about_ip = last_snapshot_.wifi_ip.empty()
+        ? "IP: Not connected" : "IP: " + last_snapshot_.wifi_ip;
+    info_card(about_ip.c_str(), 277, LV_SYMBOL_WIFI);
     // A separate danger action opens a second confirmation before data is erased.
     lv_obj_t* reset_button = lv_button_create(v13_menu_);
     lv_obj_set_size(reset_button, 284, 43);
-    lv_obj_align(reset_button, LV_ALIGN_TOP_MID, 0, 307);
+    lv_obj_align(reset_button, LV_ALIGN_TOP_MID, 0, 340);
     lv_obj_set_style_radius(reset_button, 16, 0);
-    lv_obj_set_style_bg_color(reset_button, lv_color_hex(0x44242A), 0);
+    lv_obj_set_style_bg_color(reset_button, lv_color_hex(0x472431), 0);
+    lv_obj_set_style_shadow_width(reset_button, 0, 0);
     lv_obj_set_style_border_width(reset_button, 1, 0);
     lv_obj_set_style_border_color(reset_button, lv_color_hex(0xF87171), 0);
     lv_obj_t* reset_label = lv_label_create(reset_button);
-    lv_label_set_text(reset_label, "Factory Reset");
+    lv_label_set_text(reset_label, LV_SYMBOL_WARNING " Factory Reset");
     lv_obj_set_style_text_color(reset_label, lv_color_hex(0xFFE3E3), 0);
     lv_obj_set_style_text_font(reset_label, &lv_font_montserrat_20, 0);
     lv_obj_center(reset_label);
     lv_obj_add_event_cb(reset_button, [](lv_event_t* e) {
       show_device_action_confirmation(lv_obj_get_parent(lv_event_get_target_obj(e)), true);
     }, LV_EVENT_CLICKED, this);
-    button("Back", 375, [](lv_event_t* e) {
+    button("Back", 386, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   }
