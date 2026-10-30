@@ -3430,6 +3430,8 @@ esp_err_t Ui::build_dashboard() {
     ui->power_touch_swiped_ = false;
     lv_label_set_text(ui->power_menu_status_, "Choose an action");
     ui->power_menu_active_.store(true, std::memory_order_relaxed);
+    // Separate Power screen does not need Faces animation redrawing behind it.
+    if (ui->face_renderer_) ui->face_renderer_->SetPaused(true);
     lv_screen_load(ui->power_menu_);
     ESP_LOGI(kTag, "Power screen shown by LVGL worker (from %s)",
              ui->face_home_visible_ ? "Faces" : "Bambu/menu");
@@ -3482,6 +3484,11 @@ void Ui::close_power_menu_locked() {
   // Restore the existing dashboard tree; it remembers the exact open page.
   if (screen_ != nullptr) lv_screen_load(screen_);
   power_menu_active_.store(false);
+  // If Control Center is still underneath, keep Faces paused until it closes.
+  if (face_renderer_ && (v13_menu_ == nullptr ||
+      lv_obj_has_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN))) {
+    face_renderer_->SetPaused(false);
+  }
 }
 
 void Ui::power_menu_event_cb(lv_event_t* event) {
