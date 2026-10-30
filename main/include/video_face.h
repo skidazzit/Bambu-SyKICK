@@ -10,6 +10,8 @@ public:
     ~VideoFace();
     void SetEmotion(const char* emotion);
     void SetVisible(bool visible);
+    // Stop redraw timer while a menu hides the animated face.
+    void SetPaused(bool paused);
     void Tickle();
     void Kiss();
     void Dizzy();
@@ -18,6 +20,7 @@ public:
 private:
     lv_obj_t* root_;
     lv_timer_t* timer_;
+    bool paused_ = false;
     std::string emotion_ = "neutral";
     uint32_t started_ = 0, tickled_at_ = 0;
     bool tickling_ = false;
