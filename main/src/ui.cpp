@@ -1286,7 +1286,8 @@ void show_device_action_confirmation(lv_obj_t* parent, bool factory_reset) {
     lv_obj_set_style_radius(control, 18, 0);
     lv_obj_set_style_bg_color(control, lv_color_hex(color), 0);
     lv_obj_set_style_border_width(control, 1, 0);
-    lv_obj_set_style_border_color(control, lv_color_hex(0x78AAB2), 0);
+    lv_obj_set_style_border_color(control, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_shadow_width(control, 0, 0);
     lv_obj_t* caption_label = lv_label_create(control);
     lv_label_set_text(caption_label, caption);
     lv_obj_set_style_text_font(caption_label, &lv_font_montserrat_18, 0);
@@ -3400,11 +3401,11 @@ esp_err_t Ui::build_dashboard() {
     lv_obj_center(caption);
     lv_obj_add_event_cb(btn, callback, LV_EVENT_CLICKED, this);
   };
-  power_button("Restart", 194, 0x0A697D, [](lv_event_t* e) {
+  power_button(LV_SYMBOL_REFRESH "  Restart", 194, 0x0A697D, [](lv_event_t* e) {
     static_cast<Ui*>(lv_event_get_user_data(e))->queue_power_action_locked(
         DevicePowerAction::kRestart);
   });
-  power_button("Shut Down", 264, 0x8D3948, [](lv_event_t* e) {
+  power_button(LV_SYMBOL_POWER "  Shut Down", 264, 0x8D3948, [](lv_event_t* e) {
     static_cast<Ui*>(lv_event_get_user_data(e))->queue_power_action_locked(
         DevicePowerAction::kShutdown);
   });
@@ -4705,8 +4706,8 @@ void Ui::open_v13_menu(int page) {
         "Face Options", "Display", "Wi-Fi", "Clock", "Sound"
     };
     lv_obj_t* sort_list = lv_obj_create(v13_menu_);
-    lv_obj_set_size(sort_list, 338, 266);
-    lv_obj_align(sort_list, LV_ALIGN_TOP_MID, 0, 91);
+    lv_obj_set_size(sort_list, 324, 252);
+    lv_obj_align(sort_list, LV_ALIGN_TOP_MID, 0, 98);
     lv_obj_set_style_bg_opa(sort_list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(sort_list, 0, 0);
     lv_obj_set_style_pad_all(sort_list, 0, 0);
@@ -4717,14 +4718,14 @@ void Ui::open_v13_menu(int page) {
       const uint8_t item_id = v13_preferences_.menu_order[position];
       const bool focused = position == v13_sort_selected_;
       lv_obj_t* row = lv_obj_create(sort_list);
-      lv_obj_set_size(row, 320, 82);
-      lv_obj_align(row, LV_ALIGN_TOP_MID, 0, 4 + position * 90);
-      lv_obj_set_style_radius(row, 18, 0);
+      lv_obj_set_size(row, 305, 67);
+      lv_obj_align(row, LV_ALIGN_TOP_MID, 0, 4 + position * 74);
+      lv_obj_set_style_radius(row, 19, 0);
       lv_obj_set_style_pad_all(row, 0, 0);
-      lv_obj_set_style_bg_color(row, lv_color_hex(focused ? 0x176270 : 0x10424D), 0);
+      lv_obj_set_style_bg_color(row, lv_color_hex(focused ? 0x176270 : 0x10343E), 0);
       lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
       lv_obj_set_style_border_width(row, focused ? 2 : 1, 0);
-      lv_obj_set_style_border_color(row, lv_color_hex(focused ? 0x29DBE9 : 0x22535A), 0);
+      lv_obj_set_style_border_color(row, lv_color_hex(focused ? 0x29DBE9 : 0x248DA0), 0);
       lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
       lv_obj_add_event_cb(row, [](lv_event_t* e) {
         auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
@@ -4741,7 +4742,7 @@ void Ui::open_v13_menu(int page) {
 
       auto arrow = [&](bool move_up, int inset) {
         lv_obj_t* control = lv_button_create(row);
-        lv_obj_set_size(control, 53, 54);
+        lv_obj_set_size(control, 44, 45);
         lv_obj_align(control, LV_ALIGN_RIGHT_MID, inset, 0);
         lv_obj_set_style_radius(control, 13, 0);
         lv_obj_set_style_bg_color(control,
@@ -4778,12 +4779,12 @@ void Ui::open_v13_menu(int page) {
                 ui->open_v13_menu(8);
               }, LV_EVENT_CLICKED, this);
       };
-      arrow(true, -65);
-      arrow(false, -6);
+      arrow(true, -60);
+      arrow(false, -7);
     }
     lv_obj_update_layout(sort_list);
     const int scroll_target = v13_sort_selected_ > 1
-        ? static_cast<int>(v13_sort_selected_ - 1) * 90 : 0;
+        ? static_cast<int>(v13_sort_selected_ - 1) * 74 : 0;
     lv_obj_scroll_to_y(sort_list, scroll_target, LV_ANIM_OFF);
 
     // Both footer actions remain visible, even when the list scrolls.
@@ -4822,10 +4823,11 @@ void Ui::open_v13_menu(int page) {
       lv_obj_set_size(tile, 112, 88);
       lv_obj_align(tile, LV_ALIGN_TOP_MID, (column - 1) * 120, 99 + row * 96);
       lv_obj_set_style_radius(tile, 16, 0);
-      lv_obj_set_style_bg_color(tile, lv_color_hex(0x122C37), 0);
+      lv_obj_set_style_bg_color(tile, lv_color_hex(0x10343E), 0);
+      lv_obj_set_style_bg_color(tile, lv_color_hex(0x176270), LV_STATE_PRESSED);
       lv_obj_set_style_border_width(tile, selected ? 3 : 1, 0);
       lv_obj_set_style_border_color(tile,
-          lv_color_hex(selected ? 0xFFFFFF : 0x3B5965), 0);
+          lv_color_hex(selected ? 0x29DBE9 : 0x248DA0), 0);
       lv_obj_set_style_pad_all(tile, 0, 0);
       lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
 
