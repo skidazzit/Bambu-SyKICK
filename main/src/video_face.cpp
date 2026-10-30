@@ -102,7 +102,7 @@ VideoFace::VideoFace(lv_obj_t* parent) {
         [](lv_timer_t* timer) {
             auto self = static_cast<VideoFace*>(lv_timer_get_user_data(timer));
             // Skip repainting while the Settings/game overlay covers the home face.
-            if (lv_obj_is_visible(self->root_))
+            if (!self->paused_ && lv_obj_is_visible(self->root_))
                 lv_obj_invalidate(self->root_);
         },
         50, this);
@@ -112,14 +112,14 @@ VideoFace::~VideoFace() {
     lv_obj_delete(root_);
 }
 void VideoFace::SetEmotion(const char* emotion) {
+    // Mood gets polled every second; unchanged faces need no full-screen redraw.
+    const char* next = emotion ? emotion : "neutral";
+    if (emotion_ == next) return;
     tickling_ = false;
     reaction_ = 0;
-    std::string next = emotion ? emotion : "neutral";
-    if (next != emotion_) {
-        emotion_ = next;
-        started_ = lv_tick_get();
-    }
-    lv_obj_invalidate(root_);
+    emotion_ = next;
+    started_ = lv_tick_get();
+    if (!paused_ && lv_obj_is_visible(root_)) lv_obj_invalidate(root_);
 }
 void VideoFace::Tickle() {
     reaction_ = 0;
@@ -149,10 +149,23 @@ void VideoFace::SetVisible(bool visible) {
     else
         lv_obj_add_flag(root_, LV_OBJ_FLAG_HIDDEN);
 }
+void VideoFace::SetPaused(bool paused) {
+    if (paused_ == paused) return;
+    paused_ = paused;
+    if (paused_) {
+        lv_timer_pause(timer_);
+    } else {
+        lv_timer_resume(timer_);
+        // A single full repaint restores the latest face after the menu closes.
+        if (lv_obj_is_visible(root_)) lv_obj_invalidate(root_);
+    }
+}
 void VideoFace::SetColor(uint32_t color, bool match_accents) {
+    const uint32_t next_accent = match_accents ? color : 0xff72b6;
+    if (color_ == color && accent_ == next_accent) return;
     color_ = color;
-    accent_ = match_accents ? color : 0xff72b6;
-    lv_obj_invalidate(root_);
+    accent_ = next_accent;
+    if (!paused_ && lv_obj_is_visible(root_)) lv_obj_invalidate(root_);
 }
 void VideoFace::Draw(lv_event_t* event) {
     lv_area_t area;
