@@ -9,6 +9,10 @@ CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
 CONFIG_SPIRAM_RODATA=y
 CONFIG_SPIRAM_XIP_FROM_PSRAM=y
+# Use the normal heap for small UI objects; send large image/vector buffers
+# (preview PNG, camera RGB565 and LVGL image cache) to 8 MB PSRAM.
+# Keep internal DMA-capable memory reserved for display and Wi-Fi.
+CONFIG_SPIRAM_USE_MALLOC=y
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16384
 CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=98304
 # Move WiFi/LWIP buffers to PSRAM to free internal DMA-capable RAM for display SPI
