@@ -1286,7 +1286,8 @@ void show_device_action_confirmation(lv_obj_t* parent, bool factory_reset) {
     lv_obj_set_style_radius(control, 18, 0);
     lv_obj_set_style_bg_color(control, lv_color_hex(color), 0);
     lv_obj_set_style_border_width(control, 1, 0);
-    lv_obj_set_style_border_color(control, lv_color_hex(0x78AAB2), 0);
+    lv_obj_set_style_border_color(control, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_shadow_width(control, 0, 0);
     lv_obj_t* caption_label = lv_label_create(control);
     lv_label_set_text(caption_label, caption);
     lv_obj_set_style_text_font(caption_label, &lv_font_montserrat_18, 0);
@@ -3334,10 +3335,13 @@ esp_err_t Ui::build_dashboard() {
   v13_menu_ = lv_obj_create(screen_);
   lv_obj_set_size(v13_menu_, board::kDisplayWidth, board::kDisplayHeight);
   lv_obj_center(v13_menu_);
-  lv_obj_set_style_bg_color(v13_menu_, lv_color_hex(0x080F16), 0);
+  // A subtle cyan bezel matches the neon reference without costly glow shaders.
+  lv_obj_set_style_bg_color(v13_menu_, lv_color_hex(0x06131A), 0);
   lv_obj_set_style_text_font(v13_menu_, &lv_font_montserrat_20, 0);
   lv_obj_set_style_bg_opa(v13_menu_, LV_OPA_COVER, 0);
-  lv_obj_set_style_border_width(v13_menu_, 0, 0);
+  lv_obj_set_style_radius(v13_menu_, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_border_width(v13_menu_, 2, 0);
+  lv_obj_set_style_border_color(v13_menu_, lv_color_hex(0x16B9C7), 0);
   lv_obj_set_style_pad_all(v13_menu_, 0, 0);
   lv_obj_add_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN);
   lv_obj_move_foreground(v13_menu_);
@@ -3348,18 +3352,30 @@ esp_err_t Ui::build_dashboard() {
   power_menu_ = lv_obj_create(nullptr);
   lv_obj_set_size(power_menu_, board::kDisplayWidth, board::kDisplayHeight);
   lv_obj_center(power_menu_);
-  lv_obj_set_style_bg_color(power_menu_, lv_color_hex(0x080F16), 0);
+  lv_obj_set_style_bg_color(power_menu_, lv_color_hex(0x06131A), 0);
   lv_obj_set_style_bg_opa(power_menu_, LV_OPA_COVER, 0);
-  lv_obj_set_style_border_width(power_menu_, 0, 0);
+  lv_obj_set_style_radius(power_menu_, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_border_width(power_menu_, 2, 0);
+  lv_obj_set_style_border_color(power_menu_, lv_color_hex(0x16B9C7), 0);
   lv_obj_set_style_pad_all(power_menu_, 0, 0);
   lv_obj_remove_flag(power_menu_, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_add_flag(power_menu_, LV_OBJ_FLAG_CLICKABLE);
   lv_obj_add_event_cb(power_menu_, &Ui::power_menu_event_cb, LV_EVENT_ALL, this);
+  lv_obj_t* power_handle = lv_obj_create(power_menu_);
+  lv_obj_set_size(power_handle, 66, 7);
+  lv_obj_align(power_handle, LV_ALIGN_TOP_MID, 0, 27);
+  lv_obj_set_style_bg_color(power_handle, lv_color_hex(0x20E0E9), 0);
+  lv_obj_set_style_bg_opa(power_handle, LV_OPA_COVER, 0);
+  lv_obj_set_style_radius(power_handle, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_border_width(power_handle, 0, 0);
+  lv_obj_set_style_pad_all(power_handle, 0, 0);
+  lv_obj_remove_flag(power_handle, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_remove_flag(power_handle, LV_OBJ_FLAG_SCROLLABLE);
   lv_obj_t* power_title = lv_label_create(power_menu_);
   lv_label_set_text(power_title, "Power");
   lv_obj_set_style_text_font(power_title, &lv_font_montserrat_24, 0);
   lv_obj_set_style_text_color(power_title, lv_color_hex(0xFFFFFF), 0);
-  lv_obj_align(power_title, LV_ALIGN_TOP_MID, 0, 89);
+  lv_obj_align(power_title, LV_ALIGN_TOP_MID, 0, 79);
   power_menu_status_ = lv_label_create(power_menu_);
   lv_label_set_text(power_menu_status_, "Choose an action");
   lv_obj_set_width(power_menu_status_, 300);
@@ -3373,8 +3389,10 @@ esp_err_t Ui::build_dashboard() {
     lv_obj_align(btn, LV_ALIGN_TOP_MID, 0, y);
     lv_obj_set_style_radius(btn, 20, 0);
     lv_obj_set_style_bg_color(btn, lv_color_hex(color), 0);
-    lv_obj_set_style_border_width(btn, 1, 0);
-    lv_obj_set_style_border_color(btn, lv_color_hex(0x40CADA), 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(0x176270), LV_STATE_PRESSED);
+    lv_obj_set_style_border_width(btn, 2, 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_shadow_width(btn, 0, 0);
     lv_obj_add_flag(btn, LV_OBJ_FLAG_EVENT_BUBBLE);
     lv_obj_t* caption = lv_label_create(btn);
     lv_label_set_text(caption, label);
@@ -3383,11 +3401,11 @@ esp_err_t Ui::build_dashboard() {
     lv_obj_center(caption);
     lv_obj_add_event_cb(btn, callback, LV_EVENT_CLICKED, this);
   };
-  power_button("Restart", 194, 0x0A697D, [](lv_event_t* e) {
+  power_button(LV_SYMBOL_REFRESH "  Restart", 194, 0x0A697D, [](lv_event_t* e) {
     static_cast<Ui*>(lv_event_get_user_data(e))->queue_power_action_locked(
         DevicePowerAction::kRestart);
   });
-  power_button("Shut Down", 264, 0x8D3948, [](lv_event_t* e) {
+  power_button(LV_SYMBOL_POWER "  Shut Down", 264, 0x8D3948, [](lv_event_t* e) {
     static_cast<Ui*>(lv_event_get_user_data(e))->queue_power_action_locked(
         DevicePowerAction::kShutdown);
   });
@@ -4332,6 +4350,10 @@ void Ui::update_v13_face_tick() {
     set_label_text_if_changed(v13_clock_time_label_, now > 1700000000 ? time_text : "Syncing time...");
     set_label_text_if_changed(v13_clock_date_label_, now > 1700000000 ? date_text : "Connect to Wi-Fi for time");
   }
+  if (v13_battery_status_label_ != nullptr && v13_menu_ != nullptr &&
+      !lv_obj_has_flag(v13_menu_, LV_OBJ_FLAG_HIDDEN)) {
+    refresh_control_center_battery_locked();
+  }
   if (!face_renderer_ || !face_home_visible_) return;
   v13_face_options_.mode = static_cast<int>(v13_preferences_.face_mode);
   v13_face_options_.main = static_cast<int>(v13_preferences_.main_face);
@@ -4350,6 +4372,37 @@ void Ui::update_v13_face_tick() {
     v13_last_face_ = next;
     face_renderer_->SetEmotion(FaceOptions::Names[next]);
   }
+}
+
+void Ui::refresh_control_center_battery_locked() {
+  if (!v13_battery_icon_label_ || !v13_battery_status_label_) return;
+
+  const PrinterSnapshot& power = last_snapshot_;
+  const bool has_battery = power.battery_present;
+  const char* battery_icon = has_battery ? mdi_battery_symbol(power) : kMdiBatteryAlert;
+  char text[48] = {};
+  uint32_t color = 0xE8FFFF;
+  if (has_battery) {
+    const unsigned percent = std::min<unsigned>(power.battery_percent, 100U);
+    const char* status = power.charging ? "Charging"
+        : power.usb_present ? "USB connected" : "On battery";
+    std::snprintf(text, sizeof(text), "%u%% - %s", percent, status);
+    if (power.charging) {
+      color = 0x50E9A4;
+    } else if (percent <= 15U) {
+      color = 0xFF7777;
+    }
+  } else if (power.usb_present) {
+    std::snprintf(text, sizeof(text), "USB power - No battery");
+    color = 0xBBD4DA;
+  } else {
+    std::snprintf(text, sizeof(text), "Battery status unavailable");
+    color = 0xBBD4DA;
+  }
+  set_label_text_if_changed(v13_battery_icon_label_, battery_icon);
+  set_label_text_if_changed(v13_battery_status_label_, text);
+  lv_obj_set_style_text_color(v13_battery_icon_label_, lv_color_hex(color), 0);
+  lv_obj_set_style_text_color(v13_battery_status_label_, lv_color_hex(color), 0);
 }
 
 void Ui::refresh_v13_face() {
@@ -4377,6 +4430,8 @@ void Ui::open_v13_menu(int page) {
   v13_menu_open_tick_ms_ = lv_tick_get();
   v13_clock_time_label_ = nullptr;
   v13_clock_date_label_ = nullptr;
+  v13_battery_icon_label_ = nullptr;
+  v13_battery_status_label_ = nullptr;
   lv_obj_clean(v13_menu_);
   lv_obj_scroll_to_y(v13_menu_, 0, LV_ANIM_OFF);
   lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_OFF);
@@ -4387,108 +4442,220 @@ void Ui::open_v13_menu(int page) {
   lv_obj_set_style_text_color(title, lv_color_hex(0xFFFFFF), 0);
   // Keep even the longest menu title within the narrow upper round edge.
   lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
-  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 34);
+  lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 39);
+  lv_obj_t* menu_handle = lv_obj_create(v13_menu_);
+  lv_obj_set_size(menu_handle, 64, 6);
+  lv_obj_align(menu_handle, LV_ALIGN_TOP_MID, 0, 22);
+  lv_obj_set_style_bg_color(menu_handle, lv_color_hex(0x29DBE9), 0);
+  lv_obj_set_style_bg_opa(menu_handle, LV_OPA_COVER, 0);
+  lv_obj_set_style_border_width(menu_handle, 0, 0);
+  lv_obj_set_style_radius(menu_handle, LV_RADIUS_CIRCLE, 0);
+  lv_obj_set_style_pad_all(menu_handle, 0, 0);
+  lv_obj_remove_flag(menu_handle, LV_OBJ_FLAG_CLICKABLE);
+  lv_obj_remove_flag(menu_handle, LV_OBJ_FLAG_SCROLLABLE);
 
+  // Shared reusable neon theme for all menu pages.
   auto button = [&](const char* caption, int y, lv_event_cb_t callback) {
-    // Below y=370 the circular bezel narrows sharply. A full-width button
-    // looks fine in LVGL's square layout but gets cut off on the real panel.
-    const bool footer = y >= 370;
+    const bool footer = y >= 360;
+    const bool back = std::strcmp(caption, "Back") == 0;
     lv_obj_t* b = lv_button_create(v13_menu_);
-    lv_obj_set_size(b, footer ? 220 : 284, footer ? 38 : 43);
+    lv_obj_set_size(b, footer ? 220 : 284, footer ? 39 : 46);
     lv_obj_align(b, LV_ALIGN_TOP_MID, 0, footer ? std::min(y, 385) : y);
-    lv_obj_set_style_radius(b, 16, 0);
-    lv_obj_set_style_bg_color(b, lv_color_hex(0x10424D), 0);
+    lv_obj_set_style_radius(b, 19, 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(0x10343E), 0);
+    lv_obj_set_style_bg_color(b, lv_color_hex(0x176270), LV_STATE_PRESSED);
     lv_obj_set_style_border_width(b, 1, 0);
     lv_obj_set_style_border_color(b, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_shadow_width(b, 0, 0);
     lv_obj_set_style_pad_all(b, 0, 0);
-    lv_obj_t* label = lv_label_create(b);
-    lv_label_set_text(label, caption);
-    lv_obj_set_style_text_font(label,
-                               footer ? &lv_font_montserrat_18 : &lv_font_montserrat_20, 0);
-    lv_obj_center(label);
+    lv_obj_remove_flag(b, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* text = lv_label_create(b);
+    std::string display = back ? std::string(LV_SYMBOL_LEFT "  Back") :
+        std::string(caption);
+    lv_label_set_text(text, display.c_str());
+    lv_obj_set_style_text_font(text,
+                              footer ? &lv_font_montserrat_18 : &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(text, lv_color_hex(0xF3FFFF), 0);
+    if (footer || back) {
+      lv_obj_center(text);
+    } else {
+      lv_obj_align(text, LV_ALIGN_LEFT_MID, 15, 0);
+      lv_obj_t* arrow = lv_label_create(b);
+      lv_label_set_text(arrow, LV_SYMBOL_RIGHT);
+      lv_obj_set_style_text_color(arrow, lv_color_hex(0x29DBE9), 0);
+      lv_obj_align(arrow, LV_ALIGN_RIGHT_MID, -13, 0);
+    }
     lv_obj_add_event_cb(b, callback, LV_EVENT_CLICKED, this);
   };
   auto label = [&](const char* caption, int y) {
     lv_obj_t* l = lv_label_create(v13_menu_);
-    lv_obj_set_width(l, 320);
+    lv_obj_set_width(l, 308);
     lv_label_set_long_mode(l, LV_LABEL_LONG_WRAP);
     lv_label_set_text(l, caption);
-    lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(l, lv_color_hex(0xBBD4DA), 0);
+    lv_obj_set_style_text_align(l, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_style_text_color(l, lv_color_hex(0xC8E4E8), 0);
     lv_obj_set_style_text_font(l, &lv_font_montserrat_18, 0);
     lv_obj_align(l, LV_ALIGN_TOP_MID, 0, y);
   };
   auto dropdown = [&](const char* options, int y, int value, lv_event_cb_t cb) {
     lv_obj_t* d = lv_dropdown_create(v13_menu_);
-    lv_obj_set_width(d, 284);
+    lv_obj_set_size(d, 306, 43);
     lv_obj_align(d, LV_ALIGN_TOP_MID, 0, y);
     lv_dropdown_set_options(d, options);
     lv_obj_set_style_text_font(d, &lv_font_montserrat_20, LV_PART_MAIN);
+    lv_obj_set_style_text_color(d, lv_color_hex(0xF3FFFF), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(d, lv_color_hex(0x10343E), LV_PART_MAIN);
+    lv_obj_set_style_border_color(d, lv_color_hex(0x29DBE9), LV_PART_MAIN);
+    lv_obj_set_style_border_width(d, 1, LV_PART_MAIN);
+    lv_obj_set_style_radius(d, 17, LV_PART_MAIN);
+    lv_obj_set_style_pad_left(d, 15, LV_PART_MAIN);
+    lv_obj_set_style_shadow_width(d, 0, LV_PART_MAIN);
     lv_dropdown_set_selected(d, value);
     lv_obj_add_event_cb(d, cb, LV_EVENT_VALUE_CHANGED, this);
   };
+  auto info_card = [&](const char* caption, int y, const char* glyph = LV_SYMBOL_SETTINGS) {
+    lv_obj_t* card = lv_obj_create(v13_menu_);
+    lv_obj_set_size(card, 312, 58);
+    lv_obj_align(card, LV_ALIGN_TOP_MID, 0, y);
+    lv_obj_set_style_radius(card, 20, 0);
+    lv_obj_set_style_bg_color(card, lv_color_hex(0x10343E), 0);
+    lv_obj_set_style_border_width(card, 1, 0);
+    lv_obj_set_style_border_color(card, lv_color_hex(0x235965), 0);
+    lv_obj_set_style_pad_all(card, 0, 0);
+    lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(card, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t* symbol = lv_label_create(card);
+    lv_label_set_text(symbol, glyph);
+    lv_obj_set_style_text_color(symbol, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_text_font(symbol, &lv_font_montserrat_20, 0);
+    lv_obj_align(symbol, LV_ALIGN_LEFT_MID, 13, 0);
+    lv_obj_t* text = lv_label_create(card);
+    lv_obj_set_width(text, 260);
+    lv_label_set_long_mode(text, LV_LABEL_LONG_WRAP);
+    lv_label_set_text(text, caption);
+    lv_obj_set_style_text_font(text, &lv_font_montserrat_18, 0);
+    lv_obj_set_style_text_color(text, lv_color_hex(0xE9FFFF), 0);
+    lv_obj_align(text, LV_ALIGN_LEFT_MID, 46, 0);
+  };
   if (safe_page == 0) {
-    // Sliders live in Control Center; menu options scroll below them.
-    label("Brightness", 79);
-    lv_obj_t* brightness = lv_slider_create(v13_menu_);
-    lv_obj_set_size(brightness, 270, 18);
-    lv_obj_align(brightness, LV_ALIGN_TOP_MID, 0, 111);
-    lv_slider_set_range(brightness, 10, 100);
-    lv_obj_set_style_bg_color(brightness, lv_color_hex(0x174752), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(brightness, lv_color_hex(0x29DBE9), LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(brightness, lv_color_hex(0xFFFFFF), LV_PART_KNOB);
-    lv_slider_set_value(brightness, v13_preferences_.brightness, LV_ANIM_OFF);
-    lv_obj_add_event_cb(brightness, [](lv_event_t* e) {
+    // The power status stays on Control Center only (never over Faces/camera).
+    lv_obj_t* battery_row = lv_obj_create(v13_menu_);
+    lv_obj_set_size(battery_row, 306, 42);
+    lv_obj_align(battery_row, LV_ALIGN_TOP_MID, 0, 70);
+    lv_obj_set_style_radius(battery_row, 16, 0);
+    lv_obj_set_style_bg_color(battery_row, lv_color_hex(0x10343E), 0);
+    lv_obj_set_style_border_color(battery_row, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_border_width(battery_row, 1, 0);
+    lv_obj_set_style_pad_all(battery_row, 0, 0);
+    lv_obj_remove_flag(battery_row, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_flag(battery_row, LV_OBJ_FLAG_SCROLLABLE);
+    v13_battery_icon_label_ = lv_label_create(battery_row);
+    lv_obj_set_style_text_font(v13_battery_icon_label_, &mdi_30, 0);
+    lv_obj_align(v13_battery_icon_label_, LV_ALIGN_LEFT_MID, 11, 0);
+    v13_battery_status_label_ = lv_label_create(battery_row);
+    lv_obj_set_width(v13_battery_status_label_, 234);
+    lv_obj_set_style_text_font(v13_battery_status_label_, &lv_font_montserrat_18, 0);
+    lv_label_set_long_mode(v13_battery_status_label_, LV_LABEL_LONG_CLIP);
+    lv_obj_align(v13_battery_status_label_, LV_ALIGN_LEFT_MID, 54, 0);
+    refresh_control_center_battery_locked();
+
+    // One compact icon/label/slider/value card per control, like the render.
+    auto slider_card = [&](const char* caption, const char* glyph, int y,
+                           int minimum, int maximum, int value, lv_event_cb_t callback) {
+      lv_obj_t* card = lv_obj_create(v13_menu_);
+      lv_obj_set_size(card, 316, 56);
+      lv_obj_align(card, LV_ALIGN_TOP_MID, 0, y);
+      lv_obj_set_style_radius(card, 20, 0);
+      lv_obj_set_style_bg_color(card, lv_color_hex(0x0A2732), 0);
+      lv_obj_set_style_border_width(card, 1, 0);
+      lv_obj_set_style_border_color(card, lv_color_hex(0x248DA0), 0);
+      lv_obj_set_style_pad_all(card, 0, 0);
+      lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_remove_flag(card, LV_OBJ_FLAG_CLICKABLE);
+      lv_obj_t* glyph_label = lv_label_create(card);
+      lv_label_set_text(glyph_label, glyph);
+      lv_obj_set_style_text_font(glyph_label, &lv_font_montserrat_20, 0);
+      lv_obj_set_style_text_color(glyph_label, lv_color_hex(0x9CE8F4), 0);
+      lv_obj_align(glyph_label, LV_ALIGN_LEFT_MID, 12, 0);
+      lv_obj_t* caption_label = lv_label_create(card);
+      lv_label_set_text(caption_label, caption);
+      lv_obj_set_style_text_font(caption_label, &lv_font_montserrat_18, 0);
+      lv_obj_set_style_text_color(caption_label, lv_color_hex(0xF3FFFF), 0);
+      lv_obj_align(caption_label, LV_ALIGN_LEFT_MID, 46, 0);
+      lv_obj_t* slider = lv_slider_create(card);
+      lv_obj_set_size(slider, 85, 10);
+      lv_obj_align(slider, LV_ALIGN_LEFT_MID, 172, 0);
+      lv_slider_set_range(slider, minimum, maximum);
+      lv_obj_set_style_bg_color(slider, lv_color_hex(0x174752), LV_PART_MAIN);
+      lv_obj_set_style_bg_color(slider, lv_color_hex(0x29DBE9), LV_PART_INDICATOR);
+      lv_obj_set_style_bg_color(slider, lv_color_hex(0xFFFFFF), LV_PART_KNOB);
+      lv_slider_set_value(slider, value, LV_ANIM_OFF);
+      lv_obj_t* percent = lv_label_create(card);
+      lv_label_set_text_fmt(percent, "%d%%", value);
+      lv_obj_set_style_text_color(percent, lv_color_hex(0x29DBE9), 0);
+      lv_obj_set_style_text_font(percent, &lv_font_montserrat_18, 0);
+      lv_obj_align(percent, LV_ALIGN_RIGHT_MID, -9, 0);
+      // Child #3 is the percentage label: update as the thumb moves.
+      lv_obj_add_event_cb(slider, [](lv_event_t* e) {
+        lv_obj_t* sl = lv_event_get_target_obj(e);
+        lv_obj_t* pct = lv_obj_get_child(lv_obj_get_parent(sl), 3);
+        lv_label_set_text_fmt(pct, "%ld%%", static_cast<long>(lv_slider_get_value(sl)));
+      }, LV_EVENT_VALUE_CHANGED, nullptr);
+      lv_obj_add_event_cb(slider, callback, LV_EVENT_RELEASED, this);
+    };
+    slider_card("Brightness", LV_SYMBOL_SETTINGS, 119, 10, 100,
+                v13_preferences_.brightness, [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       ui->v13_preferences_.brightness = lv_slider_get_value(lv_event_get_target_obj(e));
       ui->set_brightness_percent(ui->v13_preferences_.brightness);
       save_v13_menu_preferences(ui->v13_preferences_);
-    }, LV_EVENT_RELEASED, this);
-    label("Volume", 148);
-    lv_obj_t* volume = lv_slider_create(v13_menu_);
-    lv_obj_set_size(volume, 270, 18);
-    lv_obj_align(volume, LV_ALIGN_TOP_MID, 0, 185);
-    lv_slider_set_range(volume, 0, 100);
-    lv_obj_set_style_bg_color(volume, lv_color_hex(0x174752), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(volume, lv_color_hex(0x29DBE9), LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(volume, lv_color_hex(0xFFFFFF), LV_PART_KNOB);
-    lv_slider_set_value(volume, sound_notifier_ ? sound_notifier_->volume_percent() : 60,
-                        LV_ANIM_OFF);
-    lv_obj_add_event_cb(volume, [](lv_event_t* e) {
+    });
+    slider_card("Volume", LV_SYMBOL_AUDIO, 184, 0, 100,
+                sound_notifier_ ? sound_notifier_->volume_percent() : 60,
+                [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       const int value = lv_slider_get_value(lv_event_get_target_obj(e));
       if (ui->sound_notifier_) ui->sound_notifier_->set_volume_percent(value);
       if (ui->sound_config_store_) ui->sound_config_store_->save_audio_volume_percent(value);
-    }, LV_EVENT_RELEASED, this);
+    });
     // Match Focused Sort: fixed sliders above a round-safe scrolling card list.
     lv_obj_remove_flag(v13_menu_, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_scrollbar_mode(v13_menu_, LV_SCROLLBAR_MODE_OFF);
     lv_obj_t* nav_list = lv_obj_create(v13_menu_);
-    lv_obj_set_size(nav_list, 312, 136);
-    lv_obj_align(nav_list, LV_ALIGN_TOP_MID, 0, 220);
+    lv_obj_set_size(nav_list, 316, 110);
+    lv_obj_align(nav_list, LV_ALIGN_TOP_MID, 0, 248);
     lv_obj_set_style_bg_opa(nav_list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(nav_list, 0, 0);
     lv_obj_set_style_pad_all(nav_list, 0, 0);
     lv_obj_set_scroll_dir(nav_list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(nav_list, LV_SCROLLBAR_MODE_AUTO);
     lv_obj_add_flag(nav_list, LV_OBJ_FLAG_SCROLLABLE);
-    auto nav_card = [&](const char* caption, int position, lv_event_cb_t callback) {
+    auto nav_card = [&](const char* caption, const char* glyph, int position,
+                        lv_event_cb_t callback) {
       lv_obj_t* card = lv_button_create(nav_list);
-      lv_obj_set_size(card, 282, 66);
-      lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 4 + position * 76);
-      lv_obj_set_style_radius(card, 17, 0);
-      lv_obj_set_style_bg_color(card, lv_color_hex(position == 0 ? 0x176270 : 0x10424D), 0);
+      lv_obj_set_size(card, 290, 52);
+      lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 4 + position * 61);
+      lv_obj_set_style_radius(card, 19, 0);
+      lv_obj_set_style_bg_color(card, lv_color_hex(0x10343E), 0);
       lv_obj_set_style_bg_color(card, lv_color_hex(0x176270), LV_STATE_PRESSED);
-      lv_obj_set_style_border_width(card, position == 0 ? 2 : 1, 0);
+      lv_obj_set_style_border_width(card, 1, 0);
       lv_obj_set_style_border_width(card, 2, LV_STATE_PRESSED);
-      lv_obj_set_style_border_color(card, lv_color_hex(position == 0 ? 0x29DBE9 : 0x22535A), 0);
+      lv_obj_set_style_border_color(card, lv_color_hex(0x248DA0), 0);
       lv_obj_set_style_border_color(card, lv_color_hex(0x29DBE9), LV_STATE_PRESSED);
+      lv_obj_set_style_shadow_width(card, 0, 0);
+      lv_obj_set_style_pad_all(card, 0, 0);
       lv_obj_remove_flag(card, LV_OBJ_FLAG_SCROLLABLE);
+      lv_obj_t* icon = lv_label_create(card);
+      lv_label_set_text(icon, glyph);
+      lv_obj_set_style_text_font(icon, std::strcmp(caption, "Clock") == 0 ?
+                                  &mdi_30 : &lv_font_montserrat_20, 0);
+      lv_obj_set_style_text_color(icon, lv_color_hex(0x29DBE9), 0);
+      lv_obj_align(icon, LV_ALIGN_LEFT_MID, 14, 0);
       lv_obj_t* item_name = lv_label_create(card);
       lv_label_set_text(item_name, caption);
       lv_obj_set_style_text_font(item_name, &lv_font_montserrat_20, 0);
-      lv_obj_set_style_text_color(item_name, lv_color_hex(0xE9FFFF), 0);
-      lv_obj_align(item_name, LV_ALIGN_LEFT_MID, 13, 0);
+      lv_obj_set_style_text_color(item_name, lv_color_hex(0xF3FFFF), 0);
+      lv_obj_align(item_name, LV_ALIGN_LEFT_MID, 55, 0);
       lv_obj_t* chevron = lv_label_create(card);
       lv_label_set_text(chevron, LV_SYMBOL_RIGHT);
       lv_obj_set_style_text_color(chevron, lv_color_hex(0x29DBE9), 0);
@@ -4498,47 +4665,39 @@ void Ui::open_v13_menu(int page) {
     constexpr const char* kNames[] = {
         "Face Options", "Display", "Wi-Fi", "Clock", "Sound"
     };
+    constexpr const char* kNavSymbols[] = {
+        LV_SYMBOL_IMAGE, LV_SYMBOL_SETTINGS, LV_SYMBOL_WIFI, kMdiClock, LV_SYMBOL_AUDIO
+    };
     for (size_t position = 0; position < v13_preferences_.menu_order.size(); ++position) {
       const uint8_t id = v13_preferences_.menu_order[position];
       switch (id) {
-        case 0: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
+        case 0: nav_card(kNames[id], kNavSymbols[id], static_cast<int>(position), [](lv_event_t* e) {
           static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(1);
         }); break;
-        case 1: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
+        case 1: nav_card(kNames[id], kNavSymbols[id], static_cast<int>(position), [](lv_event_t* e) {
           static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(2);
         }); break;
-        case 2: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
+        case 2: nav_card(kNames[id], kNavSymbols[id], static_cast<int>(position), [](lv_event_t* e) {
           static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(3);
         }); break;
-        case 3: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
+        case 3: nav_card(kNames[id], kNavSymbols[id], static_cast<int>(position), [](lv_event_t* e) {
           static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(6);
         }); break;
-        case 4: nav_card(kNames[id], static_cast<int>(position), [](lv_event_t* e) {
+        case 4: nav_card(kNames[id], kNavSymbols[id], static_cast<int>(position), [](lv_event_t* e) {
           static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(7);
         }); break;
       }
     }
-    nav_card("Sort Menu", 5, [](lv_event_t* e) {
+    nav_card("Sort Menu", LV_SYMBOL_LIST, 5, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(8);
     });
-    nav_card("About", 6, [](lv_event_t* e) {
+    nav_card("About", "i", 6, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(4);
     });
-    // Restart and shutdown live in the physical PWR-key menu.
-    lv_obj_t* back = lv_button_create(v13_menu_);
-    lv_obj_set_size(back, 218, 42);
-    lv_obj_align(back, LV_ALIGN_TOP_MID, 0, 364);
-    lv_obj_set_style_radius(back, 20, 0);
-    lv_obj_set_style_bg_color(back, lv_color_hex(0x10424D), 0);
-    lv_obj_set_style_border_width(back, 1, 0);
-    lv_obj_set_style_border_color(back, lv_color_hex(0x29DBE9), 0);
-    lv_obj_t* back_label = lv_label_create(back);
-    lv_label_set_text(back_label, LV_SYMBOL_LEFT " Back");
-    lv_obj_set_style_text_font(back_label, &lv_font_montserrat_18, 0);
-    lv_obj_center(back_label);
-    lv_obj_add_event_cb(back, [](lv_event_t* e) {
+    // The hardware PWR button owns Restart and Shut Down.
+    button("Back", 366, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->close_v13_menu();
-    }, LV_EVENT_CLICKED, this);
+    });
   } else if (safe_page == 8) {
     // Focused sort: a round-screen-safe scrolling list with 52px arrow targets.
     lv_obj_remove_flag(v13_menu_, LV_OBJ_FLAG_SCROLLABLE);
@@ -4547,8 +4706,8 @@ void Ui::open_v13_menu(int page) {
         "Face Options", "Display", "Wi-Fi", "Clock", "Sound"
     };
     lv_obj_t* sort_list = lv_obj_create(v13_menu_);
-    lv_obj_set_size(sort_list, 338, 266);
-    lv_obj_align(sort_list, LV_ALIGN_TOP_MID, 0, 91);
+    lv_obj_set_size(sort_list, 324, 252);
+    lv_obj_align(sort_list, LV_ALIGN_TOP_MID, 0, 98);
     lv_obj_set_style_bg_opa(sort_list, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(sort_list, 0, 0);
     lv_obj_set_style_pad_all(sort_list, 0, 0);
@@ -4559,14 +4718,14 @@ void Ui::open_v13_menu(int page) {
       const uint8_t item_id = v13_preferences_.menu_order[position];
       const bool focused = position == v13_sort_selected_;
       lv_obj_t* row = lv_obj_create(sort_list);
-      lv_obj_set_size(row, 320, 82);
-      lv_obj_align(row, LV_ALIGN_TOP_MID, 0, 4 + position * 90);
-      lv_obj_set_style_radius(row, 18, 0);
+      lv_obj_set_size(row, 305, 67);
+      lv_obj_align(row, LV_ALIGN_TOP_MID, 0, 4 + position * 74);
+      lv_obj_set_style_radius(row, 19, 0);
       lv_obj_set_style_pad_all(row, 0, 0);
-      lv_obj_set_style_bg_color(row, lv_color_hex(focused ? 0x176270 : 0x10424D), 0);
+      lv_obj_set_style_bg_color(row, lv_color_hex(focused ? 0x176270 : 0x10343E), 0);
       lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
       lv_obj_set_style_border_width(row, focused ? 2 : 1, 0);
-      lv_obj_set_style_border_color(row, lv_color_hex(focused ? 0x29DBE9 : 0x22535A), 0);
+      lv_obj_set_style_border_color(row, lv_color_hex(focused ? 0x29DBE9 : 0x248DA0), 0);
       lv_obj_remove_flag(row, LV_OBJ_FLAG_SCROLLABLE);
       lv_obj_add_event_cb(row, [](lv_event_t* e) {
         auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
@@ -4583,7 +4742,7 @@ void Ui::open_v13_menu(int page) {
 
       auto arrow = [&](bool move_up, int inset) {
         lv_obj_t* control = lv_button_create(row);
-        lv_obj_set_size(control, 53, 54);
+        lv_obj_set_size(control, 44, 45);
         lv_obj_align(control, LV_ALIGN_RIGHT_MID, inset, 0);
         lv_obj_set_style_radius(control, 13, 0);
         lv_obj_set_style_bg_color(control,
@@ -4620,12 +4779,12 @@ void Ui::open_v13_menu(int page) {
                 ui->open_v13_menu(8);
               }, LV_EVENT_CLICKED, this);
       };
-      arrow(true, -65);
-      arrow(false, -6);
+      arrow(true, -60);
+      arrow(false, -7);
     }
     lv_obj_update_layout(sort_list);
     const int scroll_target = v13_sort_selected_ > 1
-        ? static_cast<int>(v13_sort_selected_ - 1) * 90 : 0;
+        ? static_cast<int>(v13_sort_selected_ - 1) * 74 : 0;
     lv_obj_scroll_to_y(sort_list, scroll_target, LV_ANIM_OFF);
 
     // Both footer actions remain visible, even when the list scrolls.
@@ -4664,10 +4823,11 @@ void Ui::open_v13_menu(int page) {
       lv_obj_set_size(tile, 112, 88);
       lv_obj_align(tile, LV_ALIGN_TOP_MID, (column - 1) * 120, 99 + row * 96);
       lv_obj_set_style_radius(tile, 16, 0);
-      lv_obj_set_style_bg_color(tile, lv_color_hex(0x122C37), 0);
+      lv_obj_set_style_bg_color(tile, lv_color_hex(0x10343E), 0);
+      lv_obj_set_style_bg_color(tile, lv_color_hex(0x176270), LV_STATE_PRESSED);
       lv_obj_set_style_border_width(tile, selected ? 3 : 1, 0);
       lv_obj_set_style_border_color(tile,
-          lv_color_hex(selected ? 0xFFFFFF : 0x3B5965), 0);
+          lv_color_hex(selected ? 0x29DBE9 : 0x248DA0), 0);
       lv_obj_set_style_pad_all(tile, 0, 0);
       lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -4690,10 +4850,10 @@ void Ui::open_v13_menu(int page) {
       lv_obj_add_event_cb(tile, [](lv_event_t* e) {
         auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
         if (ui == nullptr) return;
-        // The title is child 0; the nine color tiles follow in palette order.
+        // Title and cyan handle are children 0/1; color tiles follow.
         const uint32_t child_index = lv_obj_get_index(lv_event_get_target_obj(e));
-        if (child_index < 1 || child_index > 9) return;
-        ui->v13_preferences_.face_color = static_cast<V13FaceColor>(child_index - 1);
+        if (child_index < 2 || child_index > 10) return;
+        ui->v13_preferences_.face_color = static_cast<V13FaceColor>(child_index - 2);
         ui->refresh_v13_face();
         save_v13_menu_preferences(ui->v13_preferences_);
         ui->close_v13_menu();
@@ -4772,15 +4932,31 @@ void Ui::open_v13_menu(int page) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(1);
     });
   } else if (safe_page == 2) {
-    label("Brightness control is in Control Center", 110);
-    label("Idle brightness and power rules: Web Config", 185);
+    info_card("Adjust screen brightness in Control Center", 104, LV_SYMBOL_SETTINGS);
+    info_card("Volume controls are also in Control Center", 176, LV_SYMBOL_AUDIO);
+    info_card("Set idle dimming and sleep in Web Config", 248, LV_SYMBOL_HOME);
     button("Back", 375, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   } else if (safe_page == 7) {
-    label("Printer alert sounds", 87);
-    lv_obj_t* enabled = lv_switch_create(v13_menu_);
-    lv_obj_align(enabled, LV_ALIGN_TOP_MID, 0, 125);
+    info_card("Alert sound when print status changes", 86, LV_SYMBOL_AUDIO);
+    lv_obj_t* alert_card = lv_obj_create(v13_menu_);
+    lv_obj_set_size(alert_card, 312, 63);
+    lv_obj_align(alert_card, LV_ALIGN_TOP_MID, 0, 166);
+    lv_obj_set_style_bg_color(alert_card, lv_color_hex(0x10343E), 0);
+    lv_obj_set_style_border_color(alert_card, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_border_width(alert_card, 1, 0);
+    lv_obj_set_style_radius(alert_card, 18, 0);
+    lv_obj_set_style_pad_all(alert_card, 0, 0);
+    lv_obj_remove_flag(alert_card, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_remove_flag(alert_card, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_t* alert_label = lv_label_create(alert_card);
+    lv_label_set_text(alert_label, LV_SYMBOL_AUDIO "  Printer alerts");
+    lv_obj_set_style_text_font(alert_label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(alert_label, lv_color_hex(0xE9FFFF), 0);
+    lv_obj_align(alert_label, LV_ALIGN_LEFT_MID, 13, 0);
+    lv_obj_t* enabled = lv_switch_create(alert_card);
+    lv_obj_align(enabled, LV_ALIGN_RIGHT_MID, -15, 0);
     if (sound_notifier_ != nullptr && sound_notifier_->enabled()) {
       lv_obj_add_state(enabled, LV_STATE_CHECKED);
     }
@@ -4790,7 +4966,7 @@ void Ui::open_v13_menu(int page) {
       if (ui->sound_notifier_) ui->sound_notifier_->set_enabled(on);
       if (ui->sound_config_store_) ui->sound_config_store_->save_audio_enabled(on);
     }, LV_EVENT_VALUE_CHANGED, this);
-    button("Test sound", 246, [](lv_event_t* e) {
+    button("Test sound", 256, [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       if (ui->sound_notifier_) ui->sound_notifier_->play_test();
     });
@@ -4807,19 +4983,29 @@ void Ui::open_v13_menu(int page) {
     strftime(time_text, sizeof(time_text),
              v13_preferences_.clock_24_hour ? "%H:%M" : "%I:%M %p", &local_time);
     strftime(date_text, sizeof(date_text), "%a, %b %d", &local_time);
-    lv_obj_t* clock_time = lv_label_create(v13_menu_);
+    lv_obj_t* clock_card = lv_obj_create(v13_menu_);
+    lv_obj_set_size(clock_card, 306, 93);
+    lv_obj_align(clock_card, LV_ALIGN_TOP_MID, 0, 84);
+    lv_obj_set_style_radius(clock_card, 20, 0);
+    lv_obj_set_style_bg_color(clock_card, lv_color_hex(0x10343E), 0);
+    lv_obj_set_style_border_width(clock_card, 1, 0);
+    lv_obj_set_style_border_color(clock_card, lv_color_hex(0x29DBE9), 0);
+    lv_obj_set_style_pad_all(clock_card, 0, 0);
+    lv_obj_remove_flag(clock_card, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_remove_flag(clock_card, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_t* clock_time = lv_label_create(clock_card);
     lv_label_set_text(clock_time, now > 1700000000 ? time_text : "Syncing time...");
     lv_obj_set_style_text_font(clock_time, &dosis_40, 0);
     lv_obj_set_style_text_color(clock_time, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_align(clock_time, LV_ALIGN_CENTER, 0, -119);
-    lv_obj_t* clock_date = lv_label_create(v13_menu_);
+    lv_obj_align(clock_time, LV_ALIGN_TOP_MID, 0, 5);
+    lv_obj_t* clock_date = lv_label_create(clock_card);
     lv_label_set_text(clock_date, now > 1700000000 ? date_text : "Sync from Web Config");
     lv_obj_set_style_text_font(clock_date, &lv_font_montserrat_18, 0);
-    lv_obj_set_style_text_color(clock_date, lv_color_hex(0xD8E8EA), 0);
-    lv_obj_align(clock_date, LV_ALIGN_CENTER, 0, -71);
+    lv_obj_set_style_text_color(clock_date, lv_color_hex(0x29DBE9), 0);
+    lv_obj_align(clock_date, LV_ALIGN_BOTTOM_MID, 0, -8);
     v13_clock_time_label_ = clock_time;
     v13_clock_date_label_ = clock_date;
-    label("Time Zone", 195);
+    label("Time Zone", 190);
     const std::string saved_zone = sound_config_store_
         ? sound_config_store_->load_timezone_iana() : "";
     size_t selected_zone = kClockZoneCount;  // Keep other web zones unchanged.
@@ -4829,7 +5015,7 @@ void Ui::open_v13_menu(int page) {
         break;
       }
     }
-    dropdown(kClockZoneOptions, 223, static_cast<int>(selected_zone),
+    dropdown(kClockZoneOptions, 218, static_cast<int>(selected_zone),
              [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       const uint16_t selected = lv_dropdown_get_selected(lv_event_get_target_obj(e));
@@ -4840,8 +5026,8 @@ void Ui::open_v13_menu(int page) {
         // The clock timer repaints this label without destroying the picker.
       }
     });
-    label("Clock Format", 285);
-    dropdown("12-hour\n24-hour", 311, v13_preferences_.clock_24_hour ? 1 : 0,
+    label("Clock Format", 287);
+    dropdown("12-hour\n24-hour", 316, v13_preferences_.clock_24_hour ? 1 : 0,
              [](lv_event_t* e) {
       auto* ui = static_cast<Ui*>(lv_event_get_user_data(e));
       ui->v13_preferences_.clock_24_hour =
@@ -4853,40 +5039,45 @@ void Ui::open_v13_menu(int page) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   } else if (safe_page == 3) {
-    label("Open Web Config using the device's Wi-Fi IP", 110);
-    label(last_snapshot_.wifi_ip.empty() ? "Wi-Fi not connected" :
-          last_snapshot_.wifi_ip.c_str(), 160);
+    info_card(last_snapshot_.wifi_connected ? "Wi-Fi connected" : "Wi-Fi not connected",
+              95, LV_SYMBOL_WIFI);
+    std::string ip_text = last_snapshot_.wifi_ip.empty()
+        ? "IP address not assigned" : "IP: " + last_snapshot_.wifi_ip;
+    info_card(ip_text.c_str(), 169, LV_SYMBOL_SETTINGS);
+    info_card("Open Web Config using this IP on your phone", 243, LV_SYMBOL_HOME);
     button("Back", 375, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   } else {
-    label("Bambu SyKICK - Beta 2", 92);
-    label("ESP32-S3 | AMOLED 1.75 | 466x466", 137);
+    info_card("Bambu SyKICK - Beta firmware", 85, LV_SYMBOL_HOME);
+    info_card("ESP32-S3 | AMOLED 1.75-inch", 149, LV_SYMBOL_SETTINGS);
     char memory_text[64] = {};
     std::snprintf(memory_text, sizeof(memory_text),
-                  "Free RAM: %lu KB | PSRAM: %lu KB",
+                  "RAM: %lu KB  |  PSRAM: %lu KB",
                   static_cast<unsigned long>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024U),
                   static_cast<unsigned long>(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024U));
-    label(memory_text, 187);
-    label(last_snapshot_.wifi_ip.empty() ? "IP: Not connected" :
-          last_snapshot_.wifi_ip.c_str(), 242);
+    info_card(memory_text, 213, LV_SYMBOL_DRIVE);
+    std::string about_ip = last_snapshot_.wifi_ip.empty()
+        ? "IP: Not connected" : "IP: " + last_snapshot_.wifi_ip;
+    info_card(about_ip.c_str(), 277, LV_SYMBOL_WIFI);
     // A separate danger action opens a second confirmation before data is erased.
     lv_obj_t* reset_button = lv_button_create(v13_menu_);
     lv_obj_set_size(reset_button, 284, 43);
-    lv_obj_align(reset_button, LV_ALIGN_TOP_MID, 0, 307);
+    lv_obj_align(reset_button, LV_ALIGN_TOP_MID, 0, 340);
     lv_obj_set_style_radius(reset_button, 16, 0);
-    lv_obj_set_style_bg_color(reset_button, lv_color_hex(0x44242A), 0);
+    lv_obj_set_style_bg_color(reset_button, lv_color_hex(0x472431), 0);
+    lv_obj_set_style_shadow_width(reset_button, 0, 0);
     lv_obj_set_style_border_width(reset_button, 1, 0);
     lv_obj_set_style_border_color(reset_button, lv_color_hex(0xF87171), 0);
     lv_obj_t* reset_label = lv_label_create(reset_button);
-    lv_label_set_text(reset_label, "Factory Reset");
+    lv_label_set_text(reset_label, LV_SYMBOL_WARNING " Factory Reset");
     lv_obj_set_style_text_color(reset_label, lv_color_hex(0xFFE3E3), 0);
     lv_obj_set_style_text_font(reset_label, &lv_font_montserrat_20, 0);
     lv_obj_center(reset_label);
     lv_obj_add_event_cb(reset_button, [](lv_event_t* e) {
       show_device_action_confirmation(lv_obj_get_parent(lv_event_get_target_obj(e)), true);
     }, LV_EVENT_CLICKED, this);
-    button("Back", 375, [](lv_event_t* e) {
+    button("Back", 386, [](lv_event_t* e) {
       static_cast<Ui*>(lv_event_get_user_data(e))->open_v13_menu(0);
     });
   }

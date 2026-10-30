@@ -161,6 +161,7 @@ class Ui {
   void close_v13_menu();
   void refresh_v13_face();
   void update_v13_face_tick();
+  void refresh_control_center_battery_locked();
   static void v13_face_timer_cb(lv_timer_t* timer);
   void handle_logo_event(lv_event_t* event);
   void update_portal_access_visuals_locked();
@@ -211,6 +212,8 @@ class Ui {
   AudioNotifier* sound_notifier_ = nullptr;
   lv_obj_t* v13_clock_time_label_ = nullptr;
   lv_obj_t* v13_clock_date_label_ = nullptr;
+  lv_obj_t* v13_battery_icon_label_ = nullptr;
+  lv_obj_t* v13_battery_status_label_ = nullptr;
   std::unique_ptr<VideoFace> face_renderer_;
   FaceOptions v13_face_options_{};
   lv_timer_t* v13_face_timer_ = nullptr;
